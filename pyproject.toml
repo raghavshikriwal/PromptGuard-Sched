@@ -1,0 +1,91 @@
+[project]
+name = "promptguard-sched"
+version = "0.1.0"
+description = "Security evaluation of LLM-driven cloud resource scheduling: prompt-injection attack surface and layered defenses."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "TBD" }
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["src*", "eval*"]
+
+# ---------------------------------------------------------------------------
+# Ruff — linting + formatting (replaces black/isort/flake8)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "eval", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",     # pyflakes / pycodestyle
+    "I",                # isort
+    "UP",               # pyupgrade
+    "B",                # flake8-bugbear
+    "N",                # pep8-naming
+    "SIM",              # flake8-simplify
+    "RUF",              # ruff-native rules
+    "ANN",              # type annotations required — this project has a
+                         # hard rule (README §7): type hints on every signature
+]
+ignore = [
+    "ANN101",  # missing type for `self` — redundant, removed upstream anyway
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN201", "ANN001"]  # test functions don't need return/arg annotations
+"eval/attacks/**" = ["E501"]        # payload strings can be long by nature
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ---------------------------------------------------------------------------
+# mypy — strict typing (matches the "no bare dicts between pipeline stages"
+# rule: dataclasses/pydantic models only, so typing has to actually bite).
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["pulp.*", "networkx.*", "locust.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra -q --strict-markers --cov=src --cov=eval --cov-report=term-missing"
+markers = [
+    "integration: full in-process pipeline tests",
+    "adversarial: re-runs the versioned attack payload library",
+    "slow: tests that hit a real LLM backend or GPU",
+]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+branch = true
+source = ["src", "eval"]
+omit = ["*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+fail_under = 85
