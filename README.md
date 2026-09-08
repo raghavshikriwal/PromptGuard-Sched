@@ -2,7 +2,7 @@
 
 **Security evaluation of LLM-driven cloud resource scheduling: can tenant-controlled prompt injection manipulate scheduling decisions, and can a layered defense stop it — without breaking scheduling performance?**
 
-[![Status](https://img.shields.io/badge/status-Phase%200%3A%20scaffolding-yellow)]()
+[![Status](https://img.shields.io/badge/status-Phase%204%3A%20baseline%20pipeline%20wired-yellow)]()
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![License](https://img.shields.io/badge/license-TBD-lightgrey)]()
 
@@ -89,7 +89,7 @@ promptguard-sched/
 └── .env.example
 ```
 
-**Current implementation status:** scaffolding only — folder structure, dependency pins, and env template exist. No pipeline code, no DB migrations, no experiments have been run yet. The baseline validation gate (blueprint §13) has **not** been passed. **Do not build attack, defense, or dashboard code before that gate passes** — this is a hard project rule, not a suggestion.
+**Current implementation status:** `simulator/`, `encoder/`, `llm/` (backend + candidate-generation client), `ilp/` (PuLP/CBC refinement), and `scheduler/` (orchestrator + DRF fairness + persistence) are implemented, wired end-to-end for `defense_config=none`. `guard/` and `anomaly/` are not implemented yet (blueprint §16 phases 7-8) — the orchestrator does not call them and records `guard_flagged`/`anomaly_flagged` as `NULL`, not `False`, so that distinction survives in the DB. No experiments have been run against the trace dataset yet; the baseline validation gate (blueprint §13) has **not** been passed. **Do not build attack, defense, or dashboard code before that gate passes** — this is a hard project rule, not a suggestion.
 
 ---
 
