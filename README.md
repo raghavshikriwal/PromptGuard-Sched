@@ -1,110 +1,218 @@
 # PromptGuard-Sched
 
-**Security evaluation of LLM-driven cloud resource scheduling: can tenant-controlled prompt injection manipulate scheduling decisions, and can a layered defense stop it — without breaking scheduling performance?**
+**A Security Evaluation Framework for LLM-Driven Cloud Resource Scheduling**
 
-[![Status](https://img.shields.io/badge/status-Phase%205%3A%20baseline%20gate%20tooling%20ready-yellow)]()
+[![Status](https://img.shields.io/badge/status-Phase%205%3A%20baseline%20validation-yellow)]()
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![License](https://img.shields.io/badge/license-TBD-lightgrey)]()
 
 ---
 
-## 1. What this project is
+## Abstract
 
-Recent scheduling research (LLMSched-style systems) proposes using an LLM to generate cloud resource-allocation decisions from a textual description of cluster state and job requirements. That textual description includes **tenant-controlled free-text fields** — job names, job descriptions, metadata — placed directly inside the LLM's context.
+Large Language Models are increasingly being proposed as the reasoning core of cloud resource schedulers — systems that translate natural-language descriptions of jobs and cluster state into resource-allocation decisions (Ding et al., *"LLM-Driven Adaptive Cloud Resource Scheduling: Bridging Reasoning Intelligence With Optimization Guarantees,"* IEEE Open Journal of the Computer Society, 2026 — [DOI: 10.1109/OJCS.2026.3667549](https://doi.org/10.1109/OJCS.2026.3667549)).
 
-This project asks a specific, measurable question:
+That paper — and the broader LLMSched line of work it represents — demonstrates significant performance gains from this design: lower job completion time, higher resource utilization, fewer SLA violations. What it does **not** evaluate is security: the pipeline places **tenant-controlled free-text fields** (job names, job descriptions, metadata) directly inside the LLM's reasoning context, and no existing work asks what happens when that text is adversarial rather than descriptive.
 
-> **Can a tenant embed natural-language instructions inside those fields to manipulate the scheduler into over-allocating resources to their own job, and can a layered defense reduce that attack surface without unacceptable scheduling-performance or latency overhead?**
+**PromptGuard-Sched** answers that question directly:
 
-This is a **research system**, not a production scheduler and not a demo app. Every design decision here is subordinate to producing a reproducible, statistically sound answer to that question. See [`docs/PromptGuard-Sched_Final_Blueprint.md`](docs/PromptGuard-Sched_Final_Blueprint.md) for the full research plan — threat model, hypotheses, experimental matrix, and roadmap. **That document is the source of truth for scope and priorities; this README is the orientation layer on top of it.**
+> **Can a tenant embed natural-language instructions inside untrusted job fields to bias an LLM-driven scheduler toward over-allocating resources to their own job — and can a layered defense reduce that attack surface without unacceptable scheduling-performance or latency overhead?**
+
+This is a research system built to produce a reproducible, statistically grounded answer — not a product, and not a demo.
 
 ---
 
-## 2. Core concepts (read this before touching code)
+## 1. Motivation and Research Gap
 
-| Term | Meaning |
+Modern LLM-driven schedulers encode cluster state as structured, natural-language text so the model can reason about task dependencies, SLA deadlines, and resource constraints in context. This is precisely what gives the approach its strength — and precisely what creates an unexamined attack surface: the same free-text fields a tenant is expected to fill in honestly (job name, description) are, architecturally, indistinguishable from any other instruction the model reads.
+
+The LLMSched paper's own ablation results implicitly confirm this fragility — an unconstrained LLM produces invalid or unsafe assignments in up to 34% of cases without explicit guardrails. That number is reported as a *reliability* concern. PromptGuard-Sched reframes and measures it as a *security* concern: if an unguided LLM drifts this easily on its own, a deliberately crafted adversarial input is a far stronger and more measurable threat.
+
+No prior work in this space:
+- Defines a formal threat model for tenant-controlled prompt injection in scheduler metadata
+- Provides a quantitative, reproducible metric for allocation manipulation impact
+- Tests layered defenses (detection, structural trust separation, statistical rejection) against this attack surface
+- Reports results per-model, per-attack-type, and per-defense-configuration rather than as a single pooled claim
+
+---
+
+## 2. Research Questions & Hypotheses
+
+| # | Question | Measured by |
+|---|---|---|
+| RQ1 | Can tenant-controlled job metadata bias scheduling decisions? | ASR, Δ(J), CFD, performance impact |
+| RQ2 | Which defense layers actually reduce manipulation? | Ablation across C0–C4 |
+| RQ3 | Can defenses hold without unacceptable overhead? | Avg-JCT, SLA-violation rate, P50/P99 latency, false-positive rate |
+| RQ4 | Is susceptibility model-dependent? | Per-model reporting — never a single pooled number |
+
+| Hypothesis | Statement |
 |---|---|
-| `Δ(J)` (Delta-J) | `(allocated(J) - e_J) / e_J` — a job's allocation deviation from its DRF (Dominant Resource Fairness) entitlement `e_J`. The central metric of the whole project. |
-| **ASR** | Attack Success Rate — fraction of injected jobs where `Δ(J) > τ_ASR` (default threshold `τ_ASR = 0.25`). |
-| **CFD** | Collateral Fairness Deviation — `mean(|Δ(J)|)` over *non-injected* concurrent jobs. Measures blast radius on innocent tenants. |
-| `defense_config` | One of `none / guard_only / trust_only / ilp_anomaly_only / full` (aka **C0–C4**). This is a **request parameter passed through the pipeline, never a code branch or an `if/else` fork in business logic.** Any new defense-related code must respect this. |
-| `trace_id` | UUID attached to every job as it moves through the pipeline. Every stage logs its latency against this ID in `stage_latencies`. Do not compute latency any other way. |
-| `model_id` | Recorded on every experiment and every LLM call. Results are **always** reported per-model. Never write or generate a claim like "the LLM is vulnerable" — it must be "Model X under config Y exhibited ASR Z." |
-
-If you (human or agent) are about to add a feature and you can't say which of these five concepts it touches, stop and re-read the blueprint section it maps to.
+| H1 | Prompt injection can push allocation deviation Δ(J) beyond a defined threshold |
+| H2 | Layered defense reduces attack success and collateral fairness damage vs. an undefended baseline |
+| H3 | The statistical anomaly check is the single strongest defense layer — tested experimentally, not assumed |
+| H4 | Defense adds measurable but potentially acceptable latency |
+| H5 | Susceptibility varies meaningfully across LLM backends |
 
 ---
 
-## 3. Architecture
+## 3. Formal Security Metric
 
-**Current phase: modular monolith.** One Python process, cleanly separated by module — **not** by network/service boundary. This is intentional (see blueprint §7 for the full rationale): baseline validation and the full experimental matrix must run correctly before any service-splitting is considered. Do not introduce microservices, message queues, or container orchestration unless the blueprint's Phase 9 gate has been explicitly reached.
+For a job `J`, let `allocated(J)` be its actual resource allocation and `e_J` its **Dominant Resource Fairness (DRF)** entitlement — the fairness-neutral share it should receive.
+
+```
+Δ(J) = (allocated(J) − e_J) / e_J
+```
+
+An attack is **successful** when a job carries an injected payload and `Δ(J) > τ_ASR` (default `τ_ASR = 0.25`, swept at 0.10 / 0.25 / 0.50 for sensitivity analysis).
+
+```
+ASR (Attack Success Rate)          = successful injected jobs / total injected jobs
+CFD (Collateral Fairness Deviation) = mean(|Δ(J)|) over non-injected, concurrent jobs
+```
+
+**ASR answers "did the attacker win." CFD answers "who else got hurt."** Both are reported together for every result — an attack that succeeds but harms no one, and an attack that succeeds by degrading everyone else, are not the same finding.
+
+---
+
+## 4. Threat Model
+
+| | |
+|---|---|
+| **Trusted** | Scheduler code, cluster telemetry, resource capacities, DRF calculation, ILP solver, system-authored instructions |
+| **Untrusted** | Job names, job descriptions, any tenant-provided free-text field |
+| **Attacker can** | Submit an otherwise-valid job containing natural-language instructions aimed at the LLM |
+| **Attacker cannot** | Control system prompts, telemetry, the solver, capacity limits, or privileged configuration |
+| **Attack objective** | Push the injected job's allocation beyond its fairness-neutral (DRF) entitlement |
+
+This is a **relative-fairness attack model**, not a hard-limit-bypass model: the attacker cannot obtain unlimited resources, but can bias a *shared, contended pool* in their own favor at the expense of other tenants.
+
+**Attack taxonomy (6 families, versioned payload library):** Direct Override, Role Confusion, System-Tag Spoofing, Urgency/Authority Framing, Indirect Instruction, and Obfuscated Variants — generated programmatically, not hand-typed, with every payload record carrying `attack_type`, `target_job_id`, `model_id`, `experiment_id`, and ground-truth label for reproducible evaluation.
+
+---
+
+## 5. System Architecture
+
+A modular monolith by design: one Python process, cleanly separated by module rather than by network boundary. This keeps the C0–C4 defense ablation a single reproducible experiment run rather than five hand-maintained services, and defers any service-splitting until the core research question is already answered with real data.
 
 ```
 Tenant Job Submission
    → Input Validation
    → Guard Classifier          (src/guard/)      — cheap first-pass detection, evadable by design
-   → Trust-Aware State Encoder (src/encoder/)    — separates system-authored vs tenant-authored text
+   → Trust-Aware State Encoder (src/encoder/)    — separates system-authored vs. tenant-authored text
    → LLM Candidate Generation  (src/llm/)        — model_id always recorded
-   → Statistical Anomaly Check (src/anomaly/)    — Δ(J) vs DRF entitlement — PRIMARY SECURITY BOUNDARY
+   → Statistical Anomaly Check (src/anomaly/)    — Δ(J) vs. DRF entitlement — PRIMARY SECURITY BOUNDARY
    → ILP Refinement            (src/ilp/)        — PuLP/CBC, finalizes allocation
    → Execution Controller      (src/scheduler/)
-   → Metrics / DB              (db/, eval/metrics/)
+   → Metrics / Audit DB        (db/, eval/metrics/)
 ```
 
-Each stage is independently switchable via `defense_config` — this is what makes the C0–C4 ablation experiment (blueprint §12) a single reproducible run instead of five hand-edited scripts.
+Every stage is independently switchable via a `defense_config` parameter — never a hardcoded branch — which is what makes the defense ablation experiment reproducible.
+
+### Defense Architecture
+
+| Layer | Purpose | Status |
+|---|---|---|
+| 1. Guard Classifier | Cheap first-pass detection (rules / lightweight classifier) | Inexpensive and useful, but evadable — **not** treated as the security guarantee |
+| 2. Trust-Boundary Separation | System-authored context is structurally kept separate from tenant-authored text, so tenant input can never masquerade as system authority | Structural control |
+| 3. Statistical Anomaly Check | After LLM candidate generation, Δ(J) vs. DRF entitlement is computed; jobs exceeding threshold are rejected/constrained before reaching the ILP solver | **Proposed primary security boundary — proven experimentally, not assumed** |
+
+| Config | Guard | Trust Boundary | ILP Anomaly Check |
+|---|:---:|:---:|:---:|
+| C0 — None | – | – | – |
+| C1 — Guard only | ✓ | – | – |
+| C2 — Trust only | – | ✓ | – |
+| C3 — Anomaly only | – | – | ✓ |
+| C4 — Full | ✓ | ✓ | ✓ |
 
 ---
 
-## 4. Repository structure
+## 6. Repository Structure
 
 ```
 promptguard-sched/
 ├── src/
 │   ├── simulator/     # Google cluster trace loader, job/task/DAG representation
-│   ├── encoder/       # trust-aware structured state encoding (system vs tenant text)
+│   ├── encoder/       # trust-aware structured state encoding (system vs. tenant text)
 │   ├── llm/           # model backend wrapper(s); defense_config-aware
 │   ├── ilp/           # PuLP/CBC-based allocation refinement
 │   ├── guard/         # Layer 1 defense — cheap classifier/heuristics
 │   ├── anomaly/       # Layer 3 defense — Δ(J)/DRF statistical boundary
 │   └── scheduler/     # pipeline orchestration, execution controller
 ├── eval/
-│   ├── attacks/       # versioned payload library (6 attack families, see blueprint §6)
+│   ├── attacks/       # versioned payload library (6 attack families)
 │   ├── experiments/   # experiment runner — sweeps ratio × threshold × model × defense_config × seed
 │   ├── metrics/       # ASR, CFD, Δ(J), latency computation
 │   ├── statistics/    # confidence intervals, paired significance tests, effect sizes
-│   └── plots/         # figure generation for the paper (reads from DB, not from hand-copied numbers)
+│   └── plots/         # figure generation — reads directly from the database, never hand-copied
 ├── db/
-│   └── migrations/    # Alembic migrations — schema in blueprint §9
+│   └── migrations/    # schema migrations
 ├── tests/
-│   ├── unit/                    # esp. Δ(J)/DRF entitlement correctness
+│   ├── unit/                    # Δ(J)/DRF entitlement correctness — the metric's credibility rests on this
 │   ├── integration/             # full pipeline, trace_id linkage across stages
-│   └── adversarial_regression/  # re-runs payload library on every guard/LLM/anomaly change
-├── frontend/           # dashboard (built only after Phase 6 results are stable — not yet started)
-├── data/               # Google cluster trace subset (gitignored — see §6)
-├── docs/
-│   └── PromptGuard-Sched_Final_Blueprint.md   # full research plan — READ THIS FIRST
+│   └── adversarial_regression/  # re-runs the payload library on every guard/LLM/anomaly change
+├── frontend/           # dashboard — built only once baseline results are stable
+├── data/               # Google cluster trace subset (gitignored)
 ├── configs/            # experiment config files (injection ratios, thresholds, model lists)
 ├── requirements.txt
 ├── pyproject.toml
 └── .env.example
 ```
 
-**Current implementation status:** `simulator/`, `encoder/`, `llm/` (backend + candidate-generation client), `ilp/` (PuLP/CBC refinement), and `scheduler/` (orchestrator + DRF fairness + persistence) are implemented, wired end-to-end for `defense_config=none`. `guard/` and `anomaly/` are not implemented yet (blueprint §16 phases 7-8) — the orchestrator does not call them and records `guard_flagged`/`anomaly_flagged` as `NULL`, not `False`, so that distinction survives in the DB.
+**Implementation status:** `simulator/`, `encoder/`, `llm/`, `ilp/`, and `scheduler/` are implemented and wired end-to-end for `defense_config=none`. `guard/` and `anomaly/` are not yet implemented — the orchestrator does not call them, and records `guard_flagged` / `anomaly_flagged` as `NULL` rather than `False`, preserving that distinction in the data.
 
-The blueprint §13 baseline validation gate now has its tooling in place: `src/simulator/cluster_generator.py` (sizes a `ClusterState` to a target utilization against a job set's aggregate demand), `eval/experiments/baseline_runner.py` (`BaselineExperimentRunner` — replays a benign job set through the `defense_config=none` pipeline and persists it), `eval/metrics/baseline_metrics.py` (computes Avg-JCT, CPU utilization, SLA-violation rate, and a DRF fairness index from `schedule_decisions`, and compares them against the LLMSched reference figures within a documented tolerance), and a runnable CLI, `python -m eval.experiments.run_baseline_gate`. **The gate itself has not yet been executed against the real Google cluster trace and has not yet passed** — running it (first with `--backend echo` to validate the pipeline mechanics, then with a real HuggingFace backend once model access is available) is the next concrete step. **Do not build attack, defense, or dashboard code before that gate passes** — this is a hard project rule, not a suggestion.
+The baseline validation pipeline is built: a cluster-state generator, an experiment runner that replays a benign job set through the undefended pipeline, and a metrics module that computes Avg-JCT, CPU utilization, SLA-violation rate, and a DRF fairness index from stored decisions and compares them against the reference figures below. **The gate has not yet been executed against the real trace and has not yet passed** — this is the current, active phase of the project, and no attack, defense, or dashboard code is built ahead of it.
 
 ---
 
-## 5. Environment
+## 7. Dataset & Reference Baseline
+
+**Dataset:** Google cluster-usage trace (2011) — 11,000 machines, 29-day trace, 672,090 jobs, 25.4M tasks, with CPU/memory/disk demand, task dependencies, and 12 priority levels — the same trace used by the LLMSched reference paper, for direct comparability.
+
+**Reference baseline** (from the paper, Table 1 — used as the directional target for the validation gate, not a number to force-fit):
+
+| Metric | LLMSched reference |
+|---|---|
+| Avg. Job Completion Time | 417.9 s |
+| CPU Utilization | 76.6% |
+| SLA Violation Rate | 11.9% |
+| DRF Fairness Index | 0.823 |
+
+> The trace is from 2011 — results are framed as *relative attack/defense effects*, not as claims about modern GPU/serverless workloads.
+
+---
+
+## 8. Experimental Matrix
+
+| Axis | Values |
+|---|---|
+| Injection ratio | 1% / 5% / 10% |
+| ASR threshold τ | 0.10 / 0.25 / 0.50 |
+| Models | ≥ 2, from different LLM families |
+| Defense configuration | C0–C4 |
+| Random seeds | 5 |
+
+Every reported result carries a mean **and** a 95% confidence interval — never a bare percentage — with paired statistical tests and effect sizes for every defense-vs-baseline comparison.
+
+---
+
+## 9. Engineering Standards
+
+- Type hints on all function signatures; typed data objects (dataclasses/Pydantic) between pipeline stages — no bare dicts
+- Named constants for thresholds and ratios, defined centrally — never magic numbers in logic
+- Every pipeline stage carries `trace_id` (for per-stage latency, joined against `stage_latencies`) and `defense_config` end-to-end
+- `model_id` is recorded on every request and response — results are always reported per-model; a claim like *"the LLM is vulnerable"* is never made without naming the model and configuration
+- Metrics (ASR/CFD/latency) are always computed via a query against the stored experiment data — never by hand or pasted from a notebook
+
+---
+
+## 10. Environment
 
 | | |
 |---|---|
-| Python | 3.11+ (pinned via `pyenv local`) — **not** the system Python, which lacks PyTorch wheel support on this dev machine |
-| GPU | RTX 3050 6GB (laptop) — models must run 4-bit quantized (`bitsandbytes`); do not assume full-precision 7B+ models fit |
-| DB | SQLite for early development; schema is Postgres-compatible for later migration (blueprint §9 uses a `GENERATED ALWAYS AS ... STORED` column — supported in SQLite ≥ 3.31 and Postgres) |
-| Dataset | Google cluster-usage trace (2011) — start with a 1–2 day subset, not the full 29-day trace |
-
-### Setup
+| Python | 3.11+ |
+| GPU | RTX 3050 6GB — models run 4-bit quantized (`bitsandbytes`) |
+| Database | SQLite for development; schema is Postgres-compatible for later migration |
+| Dataset | Google cluster-usage trace (2011), starting with a 1–2 day subset |
 
 ```bash
 pyenv install 3.11.9
@@ -115,45 +223,15 @@ pip install -r requirements.txt
 cp .env.example .env   # fill in HF_TOKEN and DATABASE_URL
 ```
 
-Verify GPU is visible:
+Verify GPU visibility:
 ```bash
 python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
 
 ---
 
-## 6. What NOT to do (explicit, because agents/collaborators default to these)
+## 11. Reference
 
-- **Do not** introduce microservices, Docker Compose service topologies, Celery, or Kubernetes config. That is explicitly deferred to an optional later phase (blueprint §7.2) and only if justified.
-- **Do not** hardcode `model_id`, `defense_config`, or thresholds inside business logic — these are always parameters, sourced from `configs/` or experiment specs, never magic strings buried in a function.
-- **Do not** compute ASR/CFD/latency by hand or in a notebook and paste numbers into the paper/README. They must come from a `SELECT` against `schedule_decisions` / `stage_latencies` — that reproducibility guarantee is the single most important property of this codebase.
-- **Do not** commit the dataset, model weights, `.env`, or any `.db` file — see `.gitignore`.
-- **Do not** build the frontend dashboard, add authentication, or add deployment config before the baseline gate (§13 of the blueprint) has passed with results.
-- **Do not** claim "the LLM is vulnerable" anywhere in code comments, logs, or docs — always model-scoped claims (§2 above).
+Ding, G., Yang, S., Lin, H., Chen, Z., & Yang, J. S. (2026). *LLM-Driven Adaptive Cloud Resource Scheduling: Bridging Reasoning Intelligence With Optimization Guarantees.* IEEE Open Journal of the Computer Society, 7, 560–573. [https://doi.org/10.1109/OJCS.2026.3667549](https://doi.org/10.1109/OJCS.2026.3667549)
 
----
-
-## 7. Code standards
-
-- Type hints on all function signatures.
-- Dataclasses (or Pydantic models where request/response validation is needed) for structured data — no bare dicts passed between pipeline stages.
-- Named constants for thresholds/ratios (`TAU_ASR_DEFAULT = 0.25`, not a bare `0.25` in code) — defined in `configs/` or a `constants.py`, not scattered.
-- Every pipeline stage function takes and returns typed objects carrying `trace_id` and `defense_config` — do not silently drop them.
-- Tests required for: `Δ(J)`/DRF entitlement calculation, ILP constraint construction, and any new attack payload category.
-
----
-
-## 8. Where to start
-
-1. Read `docs/PromptGuard-Sched_Final_Blueprint.md` in full — sections 1, 5–9, and 13 especially.
-2. Implement `src/simulator/` — trace loader + job/task/DAG model. No LLM calls yet.
-3. Implement `src/encoder/` — converts simulator output into the structured textual state the LLM will consume, with system-authored and tenant-authored fields kept explicitly separate (this separation is Defense Layer 2 — build it in from the start, don't retrofit it).
-4. Implement `db/migrations/` from the schema in blueprint §9.
-5. Implement `src/llm/` and `src/ilp/`, wire them into `src/scheduler/` with `defense_config="none"`.
-6. Run the baseline, compare against LLMSched reference numbers (blueprint §11) — **this is the gate.** Nothing past this point starts until it passes.
-
----
-
-## 9. Reference
-
-Full research plan, threat model, formal metrics, experimental matrix, defense architecture, 12-week roadmap, paper structure, and acceptance criteria: [`docs/PromptGuard-Sched_Final_Blueprint.md`](docs/PromptGuard-Sched_Final_Blueprint.md).
+Ghodsi, A., Zaharia, M., Hindman, B., Konwinski, A., Shenker, S., & Stoica, I. (2011). *Dominant Resource Fairness: Fair Allocation of Multiple Resource Types.* NSDI.
