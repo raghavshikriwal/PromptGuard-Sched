@@ -127,7 +127,16 @@ class HuggingFaceLLMBackend:
 
 ECHO_MODEL_ID_PREFIX: str = "echo-test/"
 
-_SHARE_PATTERN = re.compile(r"total_demand:.*?cpu=([\d.]+).*?cluster_capacity:.*?cpu=([\d.]+)")
+# Two independent patterns, not one ordered one: `_build_prompt`
+# (`src/llm/client.py`) concatenates `encoded_state.system_message` (which
+# carries `_render_cluster_context`'s "total capacity: cpu=...") *before*
+# `encoded_state.user_message` (which carries `_render_job_system_fields`'s
+# "total_demand: cpu=..."), so a single regex requiring "total_demand:"
+# before "total capacity:" would never match this prompt's actual field
+# order. Searching for each figure independently is correct regardless of
+# which renderer's output happens to come first.
+_DEMAND_CPU_PATTERN = re.compile(r"total_demand:\s*cpu=([\d.]+)")
+_CAPACITY_CPU_PATTERN = re.compile(r"total capacity:\s*cpu=([\d.]+)")
 
 
 class DeterministicEchoBackend:
@@ -147,6 +156,17 @@ class DeterministicEchoBackend:
     it isn't reading the tenant narrative at all) but exactly what unit and
     integration tests need: a backend that returns schema-valid, decodable
     JSON without ever downloading model weights.
+
+    The demand/capacity figures it parses come from
+    `src.encoder.state_encoder`'s two renderer functions: job demand from
+    `_render_job_system_fields` (``"total_demand: cpu=<x>, ..."``) and
+    cluster capacity from `_render_cluster_context`
+    (``"total capacity: cpu=<y> cores, ..."``). `_DEMAND_CPU_PATTERN` /
+    `_CAPACITY_CPU_PATTERN` must track that exact wording — they are not
+    themselves validated against the encoder's output by any test, so a
+    future rewording of either renderer will silently make this backend
+    fall back to `base_share=0.5` for every prompt instead of raising,
+    unless the two are kept in sync by hand.
     """
 
     def __init__(self, seed: int = 0) -> None:
@@ -159,9 +179,10 @@ class DeterministicEchoBackend:
     def generate(self, prompt: str, *, max_new_tokens: int = 256) -> str:
         del max_new_tokens  # unused — response length is fixed and small
 
-        match = _SHARE_PATTERN.search(prompt)
-        if match:
-            demand_cpu, capacity_cpu = float(match.group(1)), float(match.group(2))
+        demand_match = _DEMAND_CPU_PATTERN.search(prompt)
+        capacity_match = _CAPACITY_CPU_PATTERN.search(prompt)
+        if demand_match and capacity_match:
+            demand_cpu, capacity_cpu = float(demand_match.group(1)), float(capacity_match.group(1))
             base_share = min(1.0, demand_cpu / capacity_cpu) if capacity_cpu > 0 else 0.5
         else:
             base_share = 0.5
