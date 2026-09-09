@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from collections.abc import Sequence
 
 from sqlalchemy import create_engine
@@ -50,6 +51,20 @@ from src.simulator.trace_loader import GoogleClusterTraceLoader, SyntheticTraceG
 
 _DEFAULT_NUM_JOBS: int = 200
 _DEFAULT_NUM_NODES: int = 20
+
+
+def _progress(message: str, *, started_at: float) -> None:
+    """Print a timestamped stage marker.
+
+    Diagnostic-only — this script has no other progress output, so a slow
+    or hung run (Windows CBC subprocess spawn, first-time HF backend model
+    download, etc.) is otherwise indistinguishable from a genuinely frozen
+    process. `flush=True` is required: without it, output can sit in a
+    buffered pipe on Windows terminals and never appear before the process
+    is killed, which is exactly the failure mode this exists to prevent.
+    """
+    elapsed_s = time.monotonic() - started_at
+    print(f"[{elapsed_s:6.1f}s] {message}", flush=True)
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
@@ -122,23 +137,34 @@ def _render_metrics(metrics: BaselineMetrics) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    started_at = time.monotonic()
     args = _parse_args(argv)
+    _progress(f"parsed args: backend={args.backend} trace={args.trace} num_jobs={args.num_jobs}", started_at=started_at)
 
     jobs = _build_jobs(args)
+    _progress(f"built {len(jobs)} jobs", started_at=started_at)
+
     cluster_state = size_cluster_for_target_utilization(
         jobs, target_utilization=args.target_utilization, num_nodes=args.num_nodes
     )
+    _progress(f"sized cluster: {args.num_nodes} nodes @ target_utilization={args.target_utilization}", started_at=started_at)
+
+    backend = _build_backend(args)
+    _progress(f"backend ready: model_id={backend.model_id}", started_at=started_at)
+
     runner = BaselineExperimentRunner(
         encoder=TrustAwareStateEncoder(),
-        llm_generator=LLMCandidateGenerator(_build_backend(args)),
+        llm_generator=LLMCandidateGenerator(backend),
         ilp_refiner=IlpAllocationRefiner(),
     )
 
     database_url = args.database_url or get_settings().database_url
     engine = create_engine(database_url)
     Base.metadata.create_all(engine)
+    _progress(f"db ready: {database_url}", started_at=started_at)
 
     with Session(engine) as session:
+        _progress(f"pipeline run starting — {len(jobs)} jobs through encode->llm->ilp->db", started_at=started_at)
         try:
             result = runner.run(
                 session,
@@ -151,6 +177,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         except BaselineRunnerError as exc:
             print(f"baseline run refused: {exc}", file=sys.stderr)
             return 2
+        _progress(
+            f"pipeline run finished: {len(result.jobs_succeeded)} succeeded, {len(result.jobs_failed)} failed",
+            started_at=started_at,
+        )
 
         if result.jobs_failed:
             print(f"{len(result.jobs_failed)}/{len(result.jobs)} jobs failed during the pipeline run:")
