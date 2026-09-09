@@ -15,9 +15,10 @@ from __future__ import annotations
 
 from enum import Enum
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class DefenseConfig(str, Enum):
@@ -90,6 +91,15 @@ class Settings(BaseSettings):
     Instantiate via `get_settings()` (cached) rather than `Settings()`
     directly, so the whole process shares one parsed, validated config
     instead of re-parsing `.env` in every module that needs a threshold.
+
+    Tuple-typed fields (`llm_model_ids`, `tau_asr_sweep`, `injection_ratios`)
+    are annotated `NoDecode`: by default pydantic-settings tries to
+    `json.loads()` any env value destined for a non-str field *before*
+    handing it to field validators, which would reject `.env`'s plain
+    comma-separated form (e.g. `LLM_MODEL_IDS=a,b`) with a `SettingsError`
+    ahead of `_split_model_ids` ever running. `NoDecode` opts these three
+    fields out of that automatic JSON decode so the raw string reaches the
+    `mode="before"` validators below, which do the actual parsing.
     """
 
     model_config = SettingsConfigDict(
@@ -112,7 +122,7 @@ class Settings(BaseSettings):
     llm_cache_enabled: bool = Field(default=True, alias="LLM_CACHE_ENABLED")
 
     # --- Model backends (blueprint §11) ------------------------------------
-    llm_model_ids: tuple[str, ...] = Field(
+    llm_model_ids: Annotated[tuple[str, ...], NoDecode] = Field(
         default=("meta-llama/Llama-3.2-3B-Instruct", "Qwen/Qwen2.5-3B-Instruct"),
         alias="LLM_MODEL_IDS",
     )
@@ -121,8 +131,10 @@ class Settings(BaseSettings):
 
     # --- Experiment defaults (never hardcode in business logic) -----------
     tau_asr_default: float = Field(default=TAU_ASR_DEFAULT, alias="TAU_ASR_DEFAULT")
-    tau_asr_sweep: tuple[float, ...] = Field(default=TAU_ASR_SWEEP, alias="TAU_ASR_SWEEP")
-    injection_ratios: tuple[float, ...] = Field(
+    tau_asr_sweep: Annotated[tuple[float, ...], NoDecode] = Field(
+        default=TAU_ASR_SWEEP, alias="TAU_ASR_SWEEP"
+    )
+    injection_ratios: Annotated[tuple[float, ...], NoDecode] = Field(
         default=INJECTION_RATIOS, alias="INJECTION_RATIOS"
     )
     default_seed_count: int = Field(default=DEFAULT_SEED_COUNT, alias="DEFAULT_SEED_COUNT")
