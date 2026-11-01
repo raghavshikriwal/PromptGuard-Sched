@@ -32,6 +32,7 @@ from uuid import UUID, uuid4
 
 import pandas as pd
 
+from src.simulator.ids import deterministic_uuid
 from src.simulator.models import AttackFamily, Job, ResourceDemand, Task, TaskEdge
 
 # --- Google cluster trace (preprocessed CSV) --------------------------------
@@ -163,8 +164,12 @@ class SyntheticTraceGenerator:
     def __init__(self, seed: int, num_tenants: int = 10) -> None:
         if num_tenants < 1:
             raise ValueError("num_tenants must be >= 1")
+        self._seed = seed
         self._rng = random.Random(seed)
-        self._tenant_ids: tuple[UUID, ...] = tuple(uuid4() for _ in range(num_tenants))
+        self._job_counter = 0
+        self._tenant_ids: tuple[UUID, ...] = tuple(
+            deterministic_uuid("synthetic", seed, "tenant", index) for index in range(num_tenants)
+        )
 
     def generate(
         self,
@@ -210,8 +215,10 @@ class SyntheticTraceGenerator:
         max_tasks: int,
         attack_payload_injector: AttackPayloadInjector | None,
     ) -> Job:
+        job_id = deterministic_uuid("synthetic", self._seed, "job", self._job_counter)
+        self._job_counter += 1
         num_tasks = self._rng.randint(min_tasks, max_tasks)
-        tasks = tuple(self._random_task(index) for index in range(num_tasks))
+        tasks = tuple(self._random_task(job_id, index) for index in range(num_tasks))
         edges = self._random_dag_edges(tasks)
 
         description = "synthetic benign job"
@@ -225,6 +232,7 @@ class SyntheticTraceGenerator:
             )
 
         return Job(
+            job_id=job_id,
             tenant_id=self._rng.choice(self._tenant_ids),
             priority=self._rng.randint(0, PRIORITY_LEVELS - 1),
             deadline_s=self._rng.choice([None, self._rng.randint(60, 7200)]),
@@ -236,8 +244,9 @@ class SyntheticTraceGenerator:
             attack_payload_type=attack_payload_type,
         )
 
-    def _random_task(self, index: int) -> Task:
+    def _random_task(self, job_id: UUID, index: int) -> Task:
         return Task(
+            task_id=deterministic_uuid("synthetic", self._seed, "task", job_id.hex, index),
             task_name=f"synthetic-task-{index}",
             demand=ResourceDemand(
                 cpu=round(self._rng.uniform(*DEFAULT_CPU_RANGE), 2),

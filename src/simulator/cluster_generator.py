@@ -28,6 +28,7 @@ Deliberately NOT this module's job:
 
 from __future__ import annotations
 
+from src.simulator.ids import deterministic_uuid
 from src.simulator.models import ClusterState, Job, NodeCapacity, ResourceDemand
 
 # Utilization must be in (0, 1]; 0 has no sensible "capacity sized to hit
@@ -115,7 +116,11 @@ def size_cluster_for_target_utilization(
     )
 
     nodes = tuple(
-        NodeCapacity(zone=f"zone-{index % 3}", capacity=per_node_capacity)
+        NodeCapacity(
+            node_id=deterministic_uuid("cluster", "node", index),
+            zone=f"zone-{index % 3}",
+            capacity=per_node_capacity,
+        )
         for index in range(num_nodes)
     )
     return ClusterState(observed_at_s=observed_at_s, nodes=nodes)

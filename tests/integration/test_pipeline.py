@@ -24,6 +24,7 @@ from src.encoder.state_encoder import TrustAwareStateEncoder
 from src.ilp.refine import IlpAllocationRefiner
 from src.llm.backends import DeterministicEchoBackend
 from src.llm.client import LLMCandidateGenerator
+from src.scheduler.capacity import CapacityLedger
 from src.scheduler.fairness import compute_delta_j, dominant_resource_share
 from src.scheduler.pipeline import SchedulingPipeline
 from src.simulator.models import ClusterState, Job, NodeCapacity, ResourceDemand, Task
@@ -170,3 +171,42 @@ class TestSchedulingPipelineIntegration:
                 defense_config=DefenseConfig.NONE,
                 active_jobs=(other_job,),
             )
+
+
+class TestMultiJobCapacityAccounting:
+    def test_jobs_sharing_a_ledger_never_allocate_more_than_the_cluster_has(
+        self, pipeline: SchedulingPipeline, cluster_state: ClusterState
+    ) -> None:
+        tenant_id = uuid4()
+        jobs = tuple(
+            Job(
+                tenant_id=tenant_id,
+                tasks=(
+                    Task(
+                        task_name=f"task-{index}",
+                        demand=ResourceDemand(cpu=10.0, mem_gb=20.0, disk_gb=0.0, net_mbps=0.0),
+                        est_duration_s=60,
+                    ),
+                ),
+            )
+            for index in range(3)
+        )
+        ledger = CapacityLedger.from_cluster(cluster_state)
+        total = cluster_state.total_capacity()
+
+        outcomes = [
+            pipeline.schedule_job(
+                job=job,
+                cluster_state=cluster_state,
+                defense_config=DefenseConfig.NONE,
+                active_jobs=jobs,
+                capacity_ledger=ledger,
+            )
+            for job in jobs
+        ]
+
+        assert sum(o.allocation.allocated.cpu for o in outcomes) <= total.cpu + 1e-6
+        assert sum(o.allocation.allocated.mem_gb for o in outcomes) <= total.mem_gb + 1e-6
+        assert ledger.remaining.cpu == pytest.approx(
+            total.cpu - sum(o.allocation.allocated.cpu for o in outcomes), abs=1e-6
+        )

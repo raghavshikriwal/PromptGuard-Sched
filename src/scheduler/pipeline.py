@@ -40,7 +40,9 @@ from src.config import DefenseConfig, PipelineStage
 from src.encoder.state_encoder import EncodedState, TrustAwareStateEncoder
 from src.ilp.refine import AllocationDecision, IlpAllocationRefiner
 from src.llm.client import LLMCandidateGenerator, LLMCandidateResult
-from src.scheduler.fairness import compute_delta_j, compute_drf_entitlements, dominant_resource_share
+from src.scheduler.capacity import CapacityLedger
+from src.scheduler.entitlement_cache import DrfEntitlementCache
+from src.scheduler.fairness import compute_delta_j, dominant_resource_share
 from src.scheduler.persistence import persist_schedule_decision, persist_stage_latencies
 from src.simulator.models import ClusterState, Job
 
@@ -81,10 +83,14 @@ class SchedulingPipeline:
         encoder: TrustAwareStateEncoder,
         llm_generator: LLMCandidateGenerator,
         ilp_refiner: IlpAllocationRefiner,
+        entitlement_cache: DrfEntitlementCache | None = None,
     ) -> None:
         self._encoder = encoder
         self._llm_generator = llm_generator
         self._ilp_refiner = ilp_refiner
+        self._entitlement_cache = (
+            entitlement_cache if entitlement_cache is not None else DrfEntitlementCache()
+        )
 
     def schedule_job(
         self,
@@ -94,6 +100,7 @@ class SchedulingPipeline:
         defense_config: DefenseConfig,
         active_jobs: Sequence[Job] | None = None,
         trace_id: UUID | None = None,
+        capacity_ledger: CapacityLedger | None = None,
     ) -> ScheduleOutcome:
         """Run one job through the full pipeline and compute its Δ(J).
 
@@ -117,6 +124,13 @@ class SchedulingPipeline:
             trace_id: reuse an existing trace id (e.g. one minted at job
                 submission, before this pipeline is invoked) rather than
                 minting a fresh one here.
+            capacity_ledger: shared per-batch ledger of unreserved
+                capacity. When given, the ILP stage refines against what
+                earlier jobs left, and this job's final allocation is
+                reserved on it once the whole outcome is computed. When
+                omitted, the job is bounded against total capacity only.
+                Δ(J)'s entitlement and dominant share always use total
+                capacity as the DRF denominator.
 
         Returns:
             A `ScheduleOutcome` with every stage's typed result, all three
@@ -138,21 +152,27 @@ class SchedulingPipeline:
         with _timed(PipelineStage.LLM, latencies_ms):
             llm_result = self._llm_generator.generate_candidate(encoded_state=encoded_state)
 
+        available_capacity = capacity_ledger.remaining if capacity_ledger is not None else None
         with _timed(PipelineStage.ILP, latencies_ms):
             allocation = self._ilp_refiner.refine(
                 job=job,
                 cluster_state=cluster_state,
                 proposal=llm_result.proposal,
                 trace_id=resolved_trace_id,
+                available_capacity=available_capacity,
             )
 
         entitlement = _resolve_entitlement(
             job=job,
             concurrent_jobs=concurrent_jobs,
             cluster_state=cluster_state,
+            cache=self._entitlement_cache,
         )
         allocated_dominant_share = dominant_resource_share(allocation.allocated, cluster_state.total_capacity())
         delta_j = compute_delta_j(allocated_dominant_share, entitlement)
+
+        if capacity_ledger is not None:
+            capacity_ledger.reserve(allocation.allocated)
 
         return ScheduleOutcome(
             trace_id=resolved_trace_id,
@@ -176,6 +196,7 @@ class SchedulingPipeline:
         defense_config: DefenseConfig,
         active_jobs: Sequence[Job] | None = None,
         trace_id: UUID | None = None,
+        capacity_ledger: CapacityLedger | None = None,
     ) -> ScheduleOutcome:
         """`schedule_job` plus writing `schedule_decisions` /
         `stage_latencies` rows via `src/scheduler/persistence.py`.
@@ -189,6 +210,7 @@ class SchedulingPipeline:
             defense_config=defense_config,
             active_jobs=active_jobs,
             trace_id=trace_id,
+            capacity_ledger=capacity_ledger,
         )
         persist_schedule_decision(
             session,
@@ -208,24 +230,28 @@ class SchedulingPipeline:
         return outcome
 
 
-def _resolve_entitlement(*, job: Job, concurrent_jobs: Sequence[Job], cluster_state: ClusterState) -> float:
+def _resolve_entitlement(
+    *,
+    job: Job,
+    concurrent_jobs: Sequence[Job],
+    cluster_state: ClusterState,
+    cache: DrfEntitlementCache,
+) -> float:
     """Compute `job`'s DRF entitlement within `concurrent_jobs`.
 
-    Thin adapter over `compute_drf_entitlements` (which is keyed by
-    `job_id` across an arbitrary job set) that also guards against the
-    caller-error case of passing an `active_jobs` sequence that does not
-    actually include `job` itself — silently returning `0.0` in that case
-    would produce a `None` Δ(J) that looks like a legitimate zero-demand
-    job rather than a caller bug.
+    Thin adapter over `DrfEntitlementCache.get_or_compute` (which memoizes
+    `compute_drf_entitlements` per distinct concurrent job set) that also
+    guards against the caller-error case of passing an `active_jobs`
+    sequence that does not actually include `job` itself — silently
+    returning `0.0` in that case would produce a `None` Δ(J) that looks
+    like a legitimate zero-demand job rather than a caller bug.
     """
-    demands = {j.job_id: j.total_demand() for j in concurrent_jobs}
-    weights = {j.job_id: j.weight for j in concurrent_jobs}
-    if job.job_id not in demands:
+    if all(j.job_id != job.job_id for j in concurrent_jobs):
         raise ValueError(
             f"active_jobs must include the job being scheduled (job_id={job.job_id}) "
             "— it does not currently"
         )
-    entitlements = compute_drf_entitlements(demands, weights, cluster_state.total_capacity())
+    entitlements = cache.get_or_compute(concurrent_jobs, cluster_state.total_capacity())
     return entitlements[job.job_id]
 
 

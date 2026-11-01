@@ -8,3 +8,13 @@ dist/
 build/
 *.egg-info/
 .DS_Store
+.coverage
+coverage.xml
+htmlcov/
+*.db
+*.db-journal
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+prof.out
+*.prof

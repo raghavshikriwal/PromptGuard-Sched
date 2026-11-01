@@ -17,13 +17,13 @@ resource (`dev_r >= x_r - proposal_r`, `dev_r >= proposal_r - x_r`) so the
 whole thing stays a linear program solvable by CBC, rather than needing a
 quadratic solver for a squared-deviation objective.
 
-Scope note (intentionally not solved here): this formulation bounds one
-job's allocation against total cluster capacity, not against capacity
-*remaining after other concurrently-scheduled jobs*. Multi-job concurrent
-capacity accounting is `eval/experiments/`'s job when it batches jobs from
-a trace window — this module's contract is "one job's proposal in, one
-job's feasible allocation out," matching `src/llm/`'s and `src/encoder/`'s
-per-job scope.
+Capacity scope: by default one job is bounded against *total* cluster
+capacity. A caller scheduling a concurrent batch passes `available_capacity`
+(what earlier jobs in the batch left over — see
+`src/scheduler/capacity.py`), and the constraint uses that instead. If the
+remaining capacity for a resource is zero, the feasible optimum is a zero
+share for that resource (the job is starved), not an error; an error is
+reserved for a resource the *cluster itself* does not have at all.
 """
 
 from __future__ import annotations
@@ -107,16 +107,25 @@ class IlpAllocationRefiner:
         cluster_state: ClusterState,
         proposal: AllocationProposal,
         trace_id: UUID,
+        available_capacity: ResourceDemand | None = None,
     ) -> AllocationDecision:
         """Refine `proposal` into a capacity-feasible `AllocationDecision`.
 
+        Args:
+            available_capacity: capacity this job may draw on, e.g. what
+                remains after earlier jobs in the batch. Defaults to the
+                cluster's total capacity. Must not exceed that total.
+
         Raises:
+            ValueError: `available_capacity` exceeds the cluster's total.
             IlpRefinementError: the LP is infeasible against `cluster_state`
                 (job demand cannot be admitted at any share) or CBC failed
                 to reach an optimal solution within `ILP_SOLVER_TIME_LIMIT_S`.
         """
         demand = job.total_demand()
-        capacity = cluster_state.total_capacity()
+        total_capacity = cluster_state.total_capacity()
+        capacity = available_capacity if available_capacity is not None else total_capacity
+        _validate_available_capacity(capacity, total_capacity)
         proposed_shares = _proposal_shares(proposal)
 
         problem = pulp.LpProblem(f"ilp_refine_{job.job_id.hex}", pulp.LpMinimize)
@@ -136,14 +145,14 @@ class IlpAllocationRefiner:
             problem += deviation_vars[field] >= target - share_vars[field]
 
             resource_demand = getattr(demand, field)
-            resource_capacity = getattr(capacity, field)
             if resource_demand > _FEASIBILITY_EPS:
-                if resource_capacity <= _FEASIBILITY_EPS:
+                cluster_capacity = getattr(total_capacity, field)
+                if cluster_capacity <= _FEASIBILITY_EPS:
                     raise IlpRefinementError(
                         f"job {job.job_id} demands {field}={resource_demand:g} but cluster "
-                        f"capacity for {field} is {resource_capacity:g} — infeasible at any share"
+                        f"capacity for {field} is {cluster_capacity:g} — infeasible at any share"
                     )
-                problem += share_vars[field] * resource_demand <= resource_capacity
+                problem += share_vars[field] * resource_demand <= getattr(capacity, field)
 
         status_code = problem.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=ILP_SOLVER_TIME_LIMIT_S))
         status = pulp.LpStatus[status_code]
@@ -170,6 +179,16 @@ class IlpAllocationRefiner:
             objective_value=pulp.value(problem.objective) or 0.0,
             solver_status=status,
         )
+
+
+def _validate_available_capacity(available: ResourceDemand, total: ResourceDemand) -> None:
+    """`available_capacity` can only ever be a subset of the cluster."""
+    for field in RESOURCE_FIELDS:
+        if getattr(available, field) > getattr(total, field) + _FEASIBILITY_EPS:
+            raise ValueError(
+                f"available_capacity.{field}={getattr(available, field):g} exceeds cluster "
+                f"total {getattr(total, field):g}"
+            )
 
 
 def _proposal_shares(proposal: AllocationProposal) -> dict[str, float]:

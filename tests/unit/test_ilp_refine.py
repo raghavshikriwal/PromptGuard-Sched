@@ -100,3 +100,56 @@ class TestIlpAllocationRefiner:
 
         for share in decision.allocated_shares.values():
             assert 0.0 <= share <= 1.0
+
+
+class TestAvailableCapacity:
+    """Multi-job accounting: refine against what earlier jobs left over."""
+
+    def test_available_capacity_binds_below_total(self) -> None:
+        refiner = IlpAllocationRefiner()
+        job = _job(cpu=100.0, mem_gb=10.0)
+        cluster = _cluster(cpu=1000.0, mem_gb=1000.0)
+        remaining = ResourceDemand(cpu=25.0, mem_gb=1000.0, disk_gb=0.0, net_mbps=0.0)
+
+        decision = refiner.refine(
+            job=job,
+            cluster_state=cluster,
+            proposal=_proposal(cpu_share=1.0, mem_share=0.5),
+            trace_id=uuid4(),
+            available_capacity=remaining,
+        )
+
+        assert decision.allocated.cpu == pytest.approx(25.0, abs=1e-3)
+        assert decision.allocated_shares["mem_gb"] == pytest.approx(0.5, abs=1e-4)
+
+    def test_exhausted_remaining_capacity_allocates_zero_not_error(self) -> None:
+        refiner = IlpAllocationRefiner()
+        job = _job(cpu=10.0, mem_gb=10.0)
+        cluster = _cluster(cpu=100.0, mem_gb=100.0)
+        remaining = ResourceDemand(cpu=0.0, mem_gb=100.0, disk_gb=0.0, net_mbps=0.0)
+
+        decision = refiner.refine(
+            job=job,
+            cluster_state=cluster,
+            proposal=_proposal(cpu_share=1.0, mem_share=0.5),
+            trace_id=uuid4(),
+            available_capacity=remaining,
+        )
+
+        assert decision.allocated.cpu == pytest.approx(0.0, abs=1e-6)
+        assert decision.allocated_shares["mem_gb"] == pytest.approx(0.5, abs=1e-4)
+
+    def test_available_capacity_above_cluster_total_is_rejected(self) -> None:
+        refiner = IlpAllocationRefiner()
+        job = _job(cpu=10.0, mem_gb=10.0)
+        cluster = _cluster(cpu=100.0, mem_gb=100.0)
+        too_much = ResourceDemand(cpu=101.0, mem_gb=100.0, disk_gb=0.0, net_mbps=0.0)
+
+        with pytest.raises(ValueError, match="exceeds cluster total"):
+            refiner.refine(
+                job=job,
+                cluster_state=cluster,
+                proposal=_proposal(cpu_share=0.5, mem_share=0.5),
+                trace_id=uuid4(),
+                available_capacity=too_much,
+            )

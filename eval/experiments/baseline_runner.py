@@ -46,6 +46,7 @@ from db.migrations.models import Tenant as TenantRow
 from src.config import DefenseConfig
 from src.encoder.state_encoder import TrustAwareStateEncoder
 from src.ilp.refine import IlpAllocationRefiner, IlpRefinementError
+from src.scheduler.capacity import CapacityLedger
 from src.llm.backends import ECHO_MODEL_ID_PREFIX
 from src.llm.client import LLMCandidateError, LLMCandidateGenerator
 from src.scheduler.fairness import DrfEntitlementError
@@ -252,6 +253,7 @@ class BaselineExperimentRunner:
         )
         session.add(experiment_row)
 
+        capacity_ledger = CapacityLedger.from_cluster(cluster_state)
         failures: list[JobFailure] = []
         for job in job_tuple:
             try:
@@ -262,6 +264,7 @@ class BaselineExperimentRunner:
                     cluster_state=cluster_state,
                     defense_config=defense_config,
                     active_jobs=job_tuple,
+                    capacity_ledger=capacity_ledger,
                 )
             except _RECORDED_FAILURE_TYPES as exc:
                 failures.append(
@@ -291,18 +294,22 @@ def _seed_tenants_and_jobs(session: Session, jobs: Sequence[Job]) -> None:
     `Job.tenant_id` values are commonly reused across many jobs in one
     batch (`SyntheticTraceGenerator` deliberately draws from a small
     tenant pool) — deduplicated here so a shared tenant is inserted once,
-    not once per job. Re-running this against a *persistent* database with
-    a job set that reuses `job_id`/`tenant_id` values from an earlier run
-    is out of scope: those ids are fresh UUIDs per `Job`/generator
-    instantiation by construction, so a collision would indicate the
-    caller deliberately replayed the same domain objects — their call to
-    make, not this function's to silently paper over.
+    not once per job. Ids are deterministic per seed (`src/simulator/ids.py`),
+    so re-running the same job set against a *persistent* database — e.g.
+    the same seed under C0..C4 for a paired comparison — is expected:
+    tenant and job rows that already exist are left in place rather than
+    re-inserted.
     """
     seen_tenant_ids: set[UUID] = set()
     for job in jobs:
         if job.tenant_id not in seen_tenant_ids:
-            session.add(TenantRow(tenant_id=job.tenant_id, name=f"tenant-{job.tenant_id.hex[:8]}"))
+            if session.get(TenantRow, job.tenant_id) is None:
+                session.add(
+                    TenantRow(tenant_id=job.tenant_id, name=f"tenant-{job.tenant_id.hex[:8]}")
+                )
             seen_tenant_ids.add(job.tenant_id)
+        if session.get(JobRow, job.job_id) is not None:
+            continue
         session.add(
             JobRow(
                 job_id=job.job_id,

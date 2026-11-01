@@ -86,17 +86,34 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    outputs:
+      defense: ${{ steps.filter.outputs.defense }}
+    steps:
+      - uses: actions/checkout@v4
+      # `github.event.pull_request.changed_files` is a *count*, not a list of
+      # paths, so `contains()` on it never matches. A paths filter does.
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            defense:
+              - 'src/guard/**'
+              - 'src/llm/**'
+              - 'src/anomaly/**'
+              - 'eval/attacks/**'
+              - 'tests/adversarial_regression/**'
+
   adversarial-regression:
     name: Adversarial regression (payload library)
     runs-on: ubuntu-latest
-    needs: [test]
-    # Only meaningful once src/guard, src/llm, src/anomaly actually exist.
-    # Runs on PRs touching those paths so payload-library regressions can't
-    # merge silently (blueprint §15).
-    if: |
-      contains(github.event.pull_request.changed_files, 'src/guard') ||
-      contains(github.event.pull_request.changed_files, 'src/llm') ||
-      contains(github.event.pull_request.changed_files, 'src/anomaly')
+    needs: [test, changes]
+    # Runs on PRs touching the defense/attack paths so payload-library
+    # regressions can't merge silently (blueprint §15).
+    if: needs.changes.outputs.defense == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -104,4 +121,6 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
-      - run: pytest tests/adversarial_regression -m adversarial
+      # Exit code 5 = "no tests collected". Tolerated only until the payload
+      # regression tests exist; remove `|| ...` once they do.
+      - run: pytest tests/adversarial_regression -m adversarial || [ $? -eq 5 ]
