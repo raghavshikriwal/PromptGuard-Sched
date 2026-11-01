@@ -194,9 +194,15 @@ class TestComputeBaselineMetrics:
         self, session: Session, jobs: list[Job], cluster: ClusterState
     ) -> None:
         result = _run(session, jobs, cluster)
-        decision = session.execute(
-            select(ScheduleDecision).where(ScheduleDecision.experiment_id == result.experiment_id)
-        ).scalars().first()
+        decision = (
+            session.execute(
+                select(ScheduleDecision).where(
+                    ScheduleDecision.experiment_id == result.experiment_id
+                )
+            )
+            .scalars()
+            .first()
+        )
         assert decision is not None
         decision.ilp_allocation = None
         session.commit()

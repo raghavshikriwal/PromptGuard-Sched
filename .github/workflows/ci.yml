@@ -121,6 +121,5 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
-      # Exit code 5 = "no tests collected". Tolerated only until the payload
-      # regression tests exist; remove `|| ...` once they do.
-      - run: pytest tests/adversarial_regression -m adversarial || [ $? -eq 5 ]
+      # --no-cov: the coverage gate applies to the full suite, not this subset.
+      - run: pytest tests/adversarial_regression -m adversarial --no-cov
