@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from src.simulator.cluster_generator import size_cluster_for_target_utilization
 from src.simulator.ids import deterministic_uuid
 from src.simulator.trace_loader import SyntheticTraceGenerator

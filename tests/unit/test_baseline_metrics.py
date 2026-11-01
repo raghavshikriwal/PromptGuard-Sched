@@ -8,7 +8,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from eval.experiments.baseline_runner import critical_path_duration_s
 from eval.metrics.baseline_metrics import (
     BaselineMetrics,
@@ -37,7 +36,9 @@ def _job(tasks: tuple[Task, ...], edges: tuple[TaskEdge, ...] = ()) -> Job:
 
 
 def _edge(parent: Task, child: Task) -> TaskEdge:
-    return TaskEdge(parent_task_id=parent.task_id, child_task_id=child.task_id, data_transfer_gb=0.0)
+    return TaskEdge(
+        parent_task_id=parent.task_id, child_task_id=child.task_id, data_transfer_gb=0.0
+    )
 
 
 class TestCriticalPathDuration:
@@ -84,7 +85,8 @@ class TestBottleneckShare:
 
     def test_zero_demand_job_is_not_bottlenecked(self) -> None:
         zero = ResourceDemand(cpu=0.0, mem_gb=0.0, disk_gb=0.0, net_mbps=0.0)
-        assert _bottleneck_share({"cpu": 0.0, "mem_gb": 0.0, "disk_gb": 0.0, "net_mbps": 0.0}, zero) == 1.0
+        shares = {"cpu": 0.0, "mem_gb": 0.0, "disk_gb": 0.0, "net_mbps": 0.0}
+        assert _bottleneck_share(shares, zero) == 1.0
 
 
 class TestCompare:

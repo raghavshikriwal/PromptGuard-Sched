@@ -35,11 +35,17 @@ select = [
 ]
 ignore = [
     "ANN101",  # missing type for `self` — redundant, removed upstream anyway
+    "ANN102",  # missing type for `cls` — same reasoning as ANN101
+    "RUF001",  # docstrings/strings use § Δ — – on purpose (blueprint references)
+    "RUF002",
+    "RUF003",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN201", "ANN001"]  # test functions don't need return/arg annotations
 "eval/attacks/**" = ["E501"]        # payload strings can be long by nature
+"eval/experiments/run_baseline_gate.py" = ["E501"]  # CLI usage example + progress f-strings
+"db/migrations/models.py" = ["ANN401"]  # TypeDecorator overrides are Any-typed by SQLAlchemy's API
 
 [tool.ruff.format]
 quote-style = "double"
@@ -60,8 +66,14 @@ no_implicit_optional = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["pulp.*", "networkx.*", "locust.*"]
+module = ["pulp.*", "networkx.*", "locust.*", "pandas.*", "transformers.*"]
 ignore_missing_imports = true
+
+# SQLAlchemy's `JSONB` constructor is untyped upstream; only the portable-JSON
+# factory in the models module calls it.
+[[tool.mypy.overrides]]
+module = ["db.migrations.models"]
+disallow_untyped_calls = false
 
 # ---------------------------------------------------------------------------
 # pytest

@@ -12,7 +12,11 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
 from db.migrations.models import Base, Experiment, ScheduleDecision
-from eval.experiments.baseline_runner import BaselineExperimentRunner, BaselineRunnerError
+from eval.experiments.baseline_runner import (
+    BaselineExperimentRunner,
+    BaselineRunnerError,
+    BaselineRunResult,
+)
 from eval.metrics.baseline_metrics import BaselineMetricsError, compute_baseline_metrics
 from src.config import DefenseConfig
 from src.encoder.state_encoder import TrustAwareStateEncoder
@@ -62,7 +66,7 @@ def cluster(jobs: list[Job]) -> ClusterState:
     return size_cluster_for_target_utilization(jobs, target_utilization=0.766, num_nodes=4)
 
 
-def _run(session: Session, jobs: list[Job], cluster: ClusterState):  # type: ignore[no-untyped-def]
+def _run(session: Session, jobs: list[Job], cluster: ClusterState) -> BaselineRunResult:
     return _runner(DeterministicEchoBackend(seed=_SEED)).run(
         session,
         jobs=jobs,
@@ -185,6 +189,25 @@ class TestComputeBaselineMetrics:
         assert 0.0 <= metrics.cpu_utilization <= 1.0
         assert 0.0 <= metrics.sla_violation_rate <= 1.0
         assert 0.0 < metrics.drf_fairness_index <= 1.0
+
+    def test_null_ilp_allocation_raises(
+        self, session: Session, jobs: list[Job], cluster: ClusterState
+    ) -> None:
+        result = _run(session, jobs, cluster)
+        decision = session.execute(
+            select(ScheduleDecision).where(ScheduleDecision.experiment_id == result.experiment_id)
+        ).scalars().first()
+        assert decision is not None
+        decision.ilp_allocation = None
+        session.commit()
+
+        with pytest.raises(BaselineMetricsError, match="ilp_allocation is NULL"):
+            compute_baseline_metrics(
+                session,
+                experiment_id=result.experiment_id,
+                jobs=list(result.jobs_succeeded),
+                cluster_state=cluster,
+            )
 
     def test_job_without_a_decision_row_raises(
         self, session: Session, jobs: list[Job], cluster: ClusterState

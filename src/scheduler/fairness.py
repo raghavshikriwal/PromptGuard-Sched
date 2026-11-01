@@ -64,7 +64,9 @@ def dominant_resource_share(amount: ResourceDemand, capacity: ResourceDemand) ->
         if resource_amount <= _EPS:
             continue
         resource_capacity = getattr(capacity, field)
-        ratios.append(resource_amount / resource_capacity if resource_capacity > _EPS else float("inf"))
+        ratios.append(
+            resource_amount / resource_capacity if resource_capacity > _EPS else float("inf")
+        )
     return max(ratios) if ratios else 0.0
 
 
@@ -114,7 +116,9 @@ def compute_drf_entitlements(
     remaining_capacity = {field: getattr(capacity, field) for field in RESOURCE_FIELDS}
 
     while active:
-        dominant_ratio = {job_id: dominant_resource_share(demands[job_id], capacity) for job_id in active}
+        dominant_ratio = {
+            job_id: dominant_resource_share(demands[job_id], capacity) for job_id in active
+        }
         if any(ratio == float("inf") for ratio in dominant_ratio.values()):
             offending = next(jid for jid, r in dominant_ratio.items() if r == float("inf"))
             raise DrfEntitlementError(
@@ -153,7 +157,9 @@ def _solve_fair_share_round(
     """
     problem = pulp.LpProblem("drf_fair_share_round", pulp.LpMaximize)
     t = pulp.LpVariable("t", lowBound=0.0)
-    share_vars = {job_id: pulp.LpVariable(f"x_{job_id.hex}", lowBound=0.0, upBound=1.0) for job_id in active}
+    share_vars = {
+        job_id: pulp.LpVariable(f"x_{job_id.hex}", lowBound=0.0, upBound=1.0) for job_id in active
+    }
 
     problem += t
     for job_id in active:
@@ -165,7 +171,9 @@ def _solve_fair_share_round(
         )
         problem += consumption <= remaining_capacity[field]
 
-    status_code = problem.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=_FAIR_SHARE_SOLVER_TIME_LIMIT_S))
+    status_code = problem.solve(
+        pulp.PULP_CBC_CMD(msg=False, timeLimit=_FAIR_SHARE_SOLVER_TIME_LIMIT_S)
+    )
     status = pulp.LpStatus[status_code]
     if status != "Optimal":
         raise DrfEntitlementError(

@@ -47,7 +47,7 @@ from __future__ import annotations
 import secrets
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.config import DefenseConfig
 from src.simulator.models import ClusterState, Job
@@ -150,9 +150,7 @@ class TrustAwareStateEncoder:
                     cluster_context,
                 )
             )
-            user_message = "\n\n".join(
-                (job_fields, _render_tenant_block(job, boundary_token))
-            )
+            user_message = "\n\n".join((job_fields, _render_tenant_block(job, boundary_token)))
             trust_separated = True
         else:
             boundary_token = None
@@ -229,8 +227,4 @@ def _render_flattened(job: Job, job_fields: str) -> str:
     vulnerable condition — see module docstring, strategy 2.
     """
     task_names = ", ".join(task.task_name for task in job.tasks)
-    return (
-        f"{job_fields}\n\n"
-        f"Job request: {job.description}\n"
-        f"Tasks: {task_names}"
-    )
+    return f"{job_fields}\n\n" f"Job request: {job.description}\n" f"Tasks: {task_names}"

@@ -113,9 +113,7 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
 
     # --- Database ---------------------------------------------------------
-    database_url: str = Field(
-        default="sqlite:///./data/promptguard_sched.db", alias="DATABASE_URL"
-    )
+    database_url: str = Field(default="sqlite:///./data/promptguard_sched.db", alias="DATABASE_URL")
 
     # --- Cache --------------------------------------------------------------
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
@@ -150,7 +148,7 @@ class Settings(BaseSettings):
 
     # --- Runtime --------------------------------------------------------
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
-    api_host: str = Field(default="0.0.0.0", alias="API_HOST")  # noqa: S104
+    api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT", ge=1, le=65535)
 
     @field_validator("llm_model_ids", mode="before")

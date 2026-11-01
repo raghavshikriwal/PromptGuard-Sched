@@ -20,9 +20,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from uuid import UUID
 
+from db.migrations.models import ScheduleDecision, StageLatency
 from sqlalchemy.orm import Session
 
-from db.migrations.models import ScheduleDecision, StageLatency
 from src.config import PipelineStage
 from src.ilp.refine import AllocationDecision
 from src.llm.client import LLMCandidateResult

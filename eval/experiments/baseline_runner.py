@@ -34,21 +34,20 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import networkx as nx
-from sqlalchemy.orm import Session
-
 from db.migrations.models import Experiment
 from db.migrations.models import Job as JobRow
 from db.migrations.models import Tenant as TenantRow
+from sqlalchemy.orm import Session
 from src.config import DefenseConfig
 from src.encoder.state_encoder import TrustAwareStateEncoder
 from src.ilp.refine import IlpAllocationRefiner, IlpRefinementError
-from src.scheduler.capacity import CapacityLedger
 from src.llm.backends import ECHO_MODEL_ID_PREFIX
 from src.llm.client import LLMCandidateError, LLMCandidateGenerator
+from src.scheduler.capacity import CapacityLedger
 from src.scheduler.fairness import DrfEntitlementError
 from src.scheduler.pipeline import SchedulingPipeline
 from src.simulator.models import ClusterState, Job
@@ -271,7 +270,7 @@ class BaselineExperimentRunner:
                     JobFailure(job_id=job.job_id, exception_type=type(exc).__name__, error=str(exc))
                 )
 
-        experiment_row.finished_at = datetime.now(timezone.utc)
+        experiment_row.finished_at = datetime.now(UTC)
         session.commit()
 
         return BaselineRunResult(

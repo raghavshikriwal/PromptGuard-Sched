@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from uuid import UUID, uuid4
 
 import pytest
-
 from src.scheduler.entitlement_cache import DrfEntitlementCache
 from src.simulator.models import Job, ResourceDemand, Task
 

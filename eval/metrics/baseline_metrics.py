@@ -27,11 +27,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
+from db.migrations.models import ScheduleDecision
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from db.migrations.models import ScheduleDecision
-from eval.experiments.baseline_runner import critical_path_duration_s
 from src.config import (
     BASELINE_REFERENCE_AVG_JCT_S,
     BASELINE_REFERENCE_CPU_UTILIZATION,
@@ -40,6 +38,8 @@ from src.config import (
 )
 from src.scheduler.fairness import RESOURCE_FIELDS
 from src.simulator.models import ClusterState, Job, ResourceDemand
+
+from eval.experiments.baseline_runner import critical_path_duration_s
 
 # "Directional consistency" (blueprint §13), not exact reproduction — the
 # 2011 trace and this project's simplified single-window scheduling model
@@ -171,12 +171,16 @@ def compute_baseline_metrics(
                 "before trusting this experiment's baseline metrics"
             )
 
+        if decision.ilp_allocation is None:
+            raise BaselineMetricsError(
+                f"job_id={job.job_id} has a schedule_decisions row for "
+                f"experiment_id={experiment_id} but its ilp_allocation is NULL — the "
+                "ILP stage did not persist an allocation, so no metric can be computed for it"
+            )
         allocated_shares: dict[str, float] = decision.ilp_allocation["allocated_shares"]
         demand = job.total_demand()
 
-        bottleneck_share = max(
-            _bottleneck_share(allocated_shares, demand), _MIN_BOTTLENECK_SHARE
-        )
+        bottleneck_share = max(_bottleneck_share(allocated_shares, demand), _MIN_BOTTLENECK_SHARE)
         jct_values.append(critical_path_duration_s(job) / bottleneck_share)
         allocated_cpu_total += allocated_shares["cpu"] * demand.cpu
 
@@ -191,9 +195,7 @@ def compute_baseline_metrics(
             )
 
     total_cpu_capacity = cluster_state.total_capacity().cpu
-    cpu_utilization = (
-        allocated_cpu_total / total_cpu_capacity if total_cpu_capacity > 0 else 0.0
-    )
+    cpu_utilization = allocated_cpu_total / total_cpu_capacity if total_cpu_capacity > 0 else 0.0
 
     return BaselineMetrics(
         experiment_id=experiment_id,
@@ -214,9 +216,7 @@ def evaluate_against_reference(
     verdict (blueprint §13: "This gate blocks everything downstream").
     """
     comparisons = (
-        _compare(
-            "avg_jct_s", metrics.avg_jct_s, BASELINE_REFERENCE_AVG_JCT_S, relative_tolerance
-        ),
+        _compare("avg_jct_s", metrics.avg_jct_s, BASELINE_REFERENCE_AVG_JCT_S, relative_tolerance),
         _compare(
             "cpu_utilization",
             metrics.cpu_utilization,
@@ -240,9 +240,13 @@ def evaluate_against_reference(
 
 
 def _load_decisions(session: Session, *, experiment_id: UUID) -> dict[UUID, ScheduleDecision]:
-    rows = session.execute(
-        select(ScheduleDecision).where(ScheduleDecision.experiment_id == experiment_id)
-    ).scalars().all()
+    rows = (
+        session.execute(
+            select(ScheduleDecision).where(ScheduleDecision.experiment_id == experiment_id)
+        )
+        .scalars()
+        .all()
+    )
     return {row.job_id: row for row in rows}
 
 

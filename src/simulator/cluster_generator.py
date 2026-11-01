@@ -98,9 +98,7 @@ def size_cluster_for_target_utilization(
 
     demand = total_job_demand(jobs)
     if (demand.cpu, demand.mem_gb, demand.disk_gb, demand.net_mbps) == (0.0, 0.0, 0.0, 0.0):
-        raise ClusterSizingError(
-            "job set demands zero on every resource — nothing to size against"
-        )
+        raise ClusterSizingError("job set demands zero on every resource — nothing to size against")
 
     total_capacity = ResourceDemand(
         cpu=demand.cpu / target_utilization,

@@ -5,7 +5,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from src.simulator.cluster_generator import (
     ClusterSizingError,
     size_cluster_for_target_utilization,
@@ -36,24 +35,18 @@ class TestTotalJobDemand:
 class TestSizeClusterForTargetUtilization:
     def test_capacity_matches_target_utilization(self) -> None:
         jobs = [_job(cpu=10.0), _job(cpu=30.0)]
-        cluster = size_cluster_for_target_utilization(
-            jobs, target_utilization=0.5, num_nodes=4
-        )
+        cluster = size_cluster_for_target_utilization(jobs, target_utilization=0.5, num_nodes=4)
         # total demand cpu = 40; at 50% utilization, capacity must be 80.
         assert cluster.total_capacity().cpu == pytest.approx(80.0)
 
     def test_full_utilization_capacity_equals_demand(self) -> None:
         jobs = [_job(cpu=12.0)]
-        cluster = size_cluster_for_target_utilization(
-            jobs, target_utilization=1.0, num_nodes=1
-        )
+        cluster = size_cluster_for_target_utilization(jobs, target_utilization=1.0, num_nodes=1)
         assert cluster.total_capacity().cpu == pytest.approx(12.0)
 
     def test_capacity_split_evenly_across_nodes(self) -> None:
         jobs = [_job(cpu=100.0)]
-        cluster = size_cluster_for_target_utilization(
-            jobs, target_utilization=1.0, num_nodes=5
-        )
+        cluster = size_cluster_for_target_utilization(jobs, target_utilization=1.0, num_nodes=5)
         assert len(cluster.nodes) == 5
         for node in cluster.nodes:
             assert node.capacity.cpu == pytest.approx(20.0)

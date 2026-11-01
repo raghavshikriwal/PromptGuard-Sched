@@ -8,7 +8,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from src.scheduler.fairness import (
     DrfEntitlementError,
     compute_delta_j,

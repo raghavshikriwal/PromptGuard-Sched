@@ -34,12 +34,9 @@ import sys
 import time
 from collections.abc import Sequence
 
+from db.migrations.models import Base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-
-from db.migrations.models import Base
-from eval.experiments.baseline_runner import BaselineExperimentRunner, BaselineRunnerError
-from eval.metrics.baseline_metrics import BaselineMetrics, compute_baseline_metrics, evaluate_against_reference
 from src.config import BASELINE_REFERENCE_CPU_UTILIZATION, DefenseConfig, get_settings
 from src.encoder.state_encoder import TrustAwareStateEncoder
 from src.ilp.refine import IlpAllocationRefiner
@@ -48,6 +45,13 @@ from src.llm.client import LLMCandidateGenerator
 from src.simulator.cluster_generator import size_cluster_for_target_utilization
 from src.simulator.models import Job
 from src.simulator.trace_loader import GoogleClusterTraceLoader, SyntheticTraceGenerator
+
+from eval.experiments.baseline_runner import BaselineExperimentRunner, BaselineRunnerError
+from eval.metrics.baseline_metrics import (
+    BaselineMetrics,
+    compute_baseline_metrics,
+    evaluate_against_reference,
+)
 
 _DEFAULT_NUM_JOBS: int = 200
 _DEFAULT_NUM_NODES: int = 20
@@ -100,7 +104,9 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
-        "--database-url", default=None, help="Overrides Settings.database_url (e.g. sqlite:///./gate.db)."
+        "--database-url",
+        default=None,
+        help="Overrides Settings.database_url (e.g. sqlite:///./gate.db).",
     )
     return parser.parse_args(argv)
 
@@ -139,7 +145,10 @@ def _render_metrics(metrics: BaselineMetrics) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     started_at = time.monotonic()
     args = _parse_args(argv)
-    _progress(f"parsed args: backend={args.backend} trace={args.trace} num_jobs={args.num_jobs}", started_at=started_at)
+    _progress(
+        f"parsed args: backend={args.backend} trace={args.trace} num_jobs={args.num_jobs}",
+        started_at=started_at,
+    )
 
     jobs = _build_jobs(args)
     _progress(f"built {len(jobs)} jobs", started_at=started_at)
@@ -147,7 +156,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     cluster_state = size_cluster_for_target_utilization(
         jobs, target_utilization=args.target_utilization, num_nodes=args.num_nodes
     )
-    _progress(f"sized cluster: {args.num_nodes} nodes @ target_utilization={args.target_utilization}", started_at=started_at)
+    _progress(
+        f"sized cluster: {args.num_nodes} nodes @ target_utilization={args.target_utilization}",
+        started_at=started_at,
+    )
 
     backend = _build_backend(args)
     _progress(f"backend ready: model_id={backend.model_id}", started_at=started_at)
@@ -164,7 +176,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     _progress(f"db ready: {database_url}", started_at=started_at)
 
     with Session(engine) as session:
-        _progress(f"pipeline run starting — {len(jobs)} jobs through encode->llm->ilp->db", started_at=started_at)
+        _progress(
+            f"pipeline run starting — {len(jobs)} jobs through encode->llm->ilp->db",
+            started_at=started_at,
+        )
         try:
             result = runner.run(
                 session,
@@ -183,7 +198,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
         if result.jobs_failed:
-            print(f"{len(result.jobs_failed)}/{len(result.jobs)} jobs failed during the pipeline run:")
+            print(
+                f"{len(result.jobs_failed)}/{len(result.jobs)} jobs failed during the pipeline run:"
+            )
             for failure in result.jobs_failed:
                 print(f"  job_id={failure.job_id} {failure.exception_type}: {failure.error}")
 

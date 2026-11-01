@@ -168,7 +168,9 @@ class SchedulingPipeline:
             cluster_state=cluster_state,
             cache=self._entitlement_cache,
         )
-        allocated_dominant_share = dominant_resource_share(allocation.allocated, cluster_state.total_capacity())
+        allocated_dominant_share = dominant_resource_share(
+            allocation.allocated, cluster_state.total_capacity()
+        )
         delta_j = compute_delta_j(allocated_dominant_share, entitlement)
 
         if capacity_ledger is not None:

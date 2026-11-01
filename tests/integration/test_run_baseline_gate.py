@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from eval.experiments import run_baseline_gate as gate
 from src.llm.backends import DeterministicEchoBackend, LLMBackend
 

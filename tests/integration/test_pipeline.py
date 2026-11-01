@@ -14,11 +14,11 @@ from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
+from db.migrations.models import Base, Experiment, ScheduleDecision, StageLatency
+from db.migrations.models import Job as JobRow
+from db.migrations.models import Tenant as TenantRow
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-
-from db.migrations.models import Base, Experiment, Job as JobRow, ScheduleDecision, StageLatency
-from db.migrations.models import Tenant as TenantRow
 from src.config import DefenseConfig, PipelineStage
 from src.encoder.state_encoder import TrustAwareStateEncoder
 from src.ilp.refine import IlpAllocationRefiner
@@ -126,9 +126,11 @@ class TestSchedulingPipelineIntegration:
         assert decision.guard_flagged is None  # guard layer not implemented yet
         assert decision.anomaly_flagged is None  # anomaly layer not implemented yet
 
-        latency_rows = session.execute(
-            select(StageLatency).where(StageLatency.trace_id == outcome.trace_id)
-        ).scalars().all()
+        latency_rows = (
+            session.execute(select(StageLatency).where(StageLatency.trace_id == outcome.trace_id))
+            .scalars()
+            .all()
+        )
         assert {row.stage for row in latency_rows} == {
             PipelineStage.ENCODE.value,
             PipelineStage.LLM.value,
@@ -144,9 +146,13 @@ class TestSchedulingPipelineIntegration:
         achieved dominant share — a regression guard against the
         orchestrator silently diverging from the formula it wraps.
         """
-        outcome = pipeline.schedule_job(job=job, cluster_state=cluster_state, defense_config=DefenseConfig.NONE)
+        outcome = pipeline.schedule_job(
+            job=job, cluster_state=cluster_state, defense_config=DefenseConfig.NONE
+        )
 
-        achieved_share = dominant_resource_share(outcome.allocation.allocated, cluster_state.total_capacity())
+        achieved_share = dominant_resource_share(
+            outcome.allocation.allocated, cluster_state.total_capacity()
+        )
         expected_delta_j = compute_delta_j(achieved_share, outcome.entitlement)
 
         assert outcome.delta_j == expected_delta_j

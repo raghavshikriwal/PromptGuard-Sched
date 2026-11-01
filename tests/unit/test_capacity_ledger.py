@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from src.scheduler.capacity import CapacityLedger
 from src.simulator.models import ClusterState, NodeCapacity, ResourceDemand
 
@@ -18,7 +17,9 @@ class TestCapacityLedger:
         assert ledger.remaining == _demand(cpu=10.0, mem_gb=20.0)
 
     def test_from_cluster_sums_nodes(self) -> None:
-        nodes = tuple(NodeCapacity(zone="z", capacity=_demand(cpu=4.0, mem_gb=8.0)) for _ in range(3))
+        nodes = tuple(
+            NodeCapacity(zone="z", capacity=_demand(cpu=4.0, mem_gb=8.0)) for _ in range(3)
+        )
         ledger = CapacityLedger.from_cluster(ClusterState(observed_at_s=0, nodes=nodes))
         assert ledger.remaining.cpu == pytest.approx(12.0)
         assert ledger.remaining.mem_gb == pytest.approx(24.0)

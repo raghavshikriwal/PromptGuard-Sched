@@ -16,20 +16,19 @@ Create Date: 2026-09-09 00:00:00.000000
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-
 from db.migrations.models import GUID, PortableJSON
 from src.config import DefenseConfig, PipelineStage
 from src.simulator.models import AttackFamily
 
 # revision identifiers, used by Alembic.
 revision: str = "0001_initial_schema"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -43,9 +42,7 @@ def upgrade() -> None:
     op.create_table(
         "jobs",
         sa.Column("job_id", GUID(), primary_key=True),
-        sa.Column(
-            "tenant_id", GUID(), sa.ForeignKey("tenants.tenant_id"), nullable=True
-        ),
+        sa.Column("tenant_id", GUID(), sa.ForeignKey("tenants.tenant_id"), nullable=True),
         sa.Column("submitted_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("priority", sa.SmallInteger(), nullable=True),
         sa.Column("deadline_s", sa.Integer(), nullable=True),
@@ -84,12 +81,8 @@ def upgrade() -> None:
 
     op.create_table(
         "task_edges",
-        sa.Column(
-            "parent_task_id", GUID(), sa.ForeignKey("tasks.task_id"), primary_key=True
-        ),
-        sa.Column(
-            "child_task_id", GUID(), sa.ForeignKey("tasks.task_id"), primary_key=True
-        ),
+        sa.Column("parent_task_id", GUID(), sa.ForeignKey("tasks.task_id"), primary_key=True),
+        sa.Column("child_task_id", GUID(), sa.ForeignKey("tasks.task_id"), primary_key=True),
         sa.Column("data_transfer_gb", sa.Numeric(), nullable=False),
         sa.CheckConstraint("parent_task_id <> child_task_id", name="ck_task_edges_no_self_loop"),
     )

@@ -130,7 +130,9 @@ class IlpAllocationRefiner:
 
         problem = pulp.LpProblem(f"ilp_refine_{job.job_id.hex}", pulp.LpMinimize)
         share_vars = {
-            field: pulp.LpVariable(f"x_{field}", lowBound=_SHARE_LOWER_BOUND, upBound=_SHARE_UPPER_BOUND)
+            field: pulp.LpVariable(
+                f"x_{field}", lowBound=_SHARE_LOWER_BOUND, upBound=_SHARE_UPPER_BOUND
+            )
             for field in RESOURCE_FIELDS
         }
         deviation_vars = {
@@ -162,7 +164,9 @@ class IlpAllocationRefiner:
                 f"within {ILP_SOLVER_TIME_LIMIT_S}s"
             )
 
-        allocated_shares = {field: _clamp_share(share_vars[field].value()) for field in RESOURCE_FIELDS}
+        allocated_shares = {
+            field: _clamp_share(share_vars[field].value()) for field in RESOURCE_FIELDS
+        }
         allocated = ResourceDemand(
             cpu=allocated_shares["cpu"] * demand.cpu,
             mem_gb=allocated_shares["mem_gb"] * demand.mem_gb,

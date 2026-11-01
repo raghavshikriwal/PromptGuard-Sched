@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from src.config import Settings, get_settings
 
@@ -53,7 +53,7 @@ class LLMBackend(Protocol):
 # loaded once per process, not once per job — with a 6GB card (README §5)
 # reloading per call is not just slow, it risks OOM under concurrent load
 # tests (blueprint §15 Locust/k6 latency suite).
-_MODEL_CACHE: dict[str, tuple[object, object]] = {}  # model_id -> (model, tokenizer)
+_MODEL_CACHE: dict[str, tuple[Any, Any]] = {}  # model_id -> (model, tokenizer)
 
 
 class HuggingFaceLLMBackend:
@@ -79,7 +79,7 @@ class HuggingFaceLLMBackend:
     def model_id(self) -> str:
         return self._model_id
 
-    def _load(self) -> tuple[object, object]:
+    def _load(self) -> tuple[Any, Any]:
         if self._model_id in _MODEL_CACHE:
             return _MODEL_CACHE[self._model_id]
 
@@ -120,7 +120,7 @@ class HuggingFaceLLMBackend:
                 pad_token_id=tokenizer.eos_token_id,
             )
         generated_ids = output_ids[0][inputs["input_ids"].shape[1] :]
-        return tokenizer.decode(generated_ids, skip_special_tokens=True)
+        return str(tokenizer.decode(generated_ids, skip_special_tokens=True))
 
 
 # --- Dev/test backend: deterministic, no weights, no GPU ---------------------

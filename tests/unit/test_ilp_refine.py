@@ -7,7 +7,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from src.ilp.refine import IlpAllocationRefiner, IlpRefinementError
 from src.llm.schema import AllocationProposal
 from src.simulator.models import ClusterState, Job, NodeCapacity, ResourceDemand, Task
@@ -26,7 +25,9 @@ def _job(*, cpu: float, mem_gb: float, disk_gb: float = 0.0, net_mbps: float = 0
     )
 
 
-def _cluster(*, cpu: float, mem_gb: float, disk_gb: float = 0.0, net_mbps: float = 0.0) -> ClusterState:
+def _cluster(
+    *, cpu: float, mem_gb: float, disk_gb: float = 0.0, net_mbps: float = 0.0
+) -> ClusterState:
     return ClusterState(
         observed_at_s=0,
         nodes=(
@@ -54,7 +55,9 @@ class TestIlpAllocationRefiner:
         cluster = _cluster(cpu=1000.0, mem_gb=1000.0)
         proposal = _proposal(cpu_share=0.5, mem_share=0.9)
 
-        decision = refiner.refine(job=job, cluster_state=cluster, proposal=proposal, trace_id=uuid4())
+        decision = refiner.refine(
+            job=job, cluster_state=cluster, proposal=proposal, trace_id=uuid4()
+        )
 
         assert decision.solver_status == "Optimal"
         assert decision.allocated_shares["cpu"] == pytest.approx(0.5, abs=1e-4)
@@ -74,7 +77,9 @@ class TestIlpAllocationRefiner:
         cluster = _cluster(cpu=50.0, mem_gb=1000.0)  # only half the job's cpu demand fits
         proposal = _proposal(cpu_share=1.0, mem_share=0.5)  # asks for everything
 
-        decision = refiner.refine(job=job, cluster_state=cluster, proposal=proposal, trace_id=uuid4())
+        decision = refiner.refine(
+            job=job, cluster_state=cluster, proposal=proposal, trace_id=uuid4()
+        )
 
         assert decision.allocated_shares["cpu"] == pytest.approx(0.5, abs=1e-4)
         assert decision.allocated.cpu <= 50.0 + 1e-6
@@ -96,7 +101,9 @@ class TestIlpAllocationRefiner:
         cluster = _cluster(cpu=1000.0, mem_gb=1000.0)
         proposal = _proposal(cpu_share=1.0, mem_share=0.0)
 
-        decision = refiner.refine(job=job, cluster_state=cluster, proposal=proposal, trace_id=uuid4())
+        decision = refiner.refine(
+            job=job, cluster_state=cluster, proposal=proposal, trace_id=uuid4()
+        )
 
         for share in decision.allocated_shares.values():
             assert 0.0 <= share <= 1.0

@@ -47,8 +47,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.types import JSON, CHAR
-
+from sqlalchemy.types import CHAR, JSON
 from src.config import DefenseConfig, PipelineStage
 from src.simulator.models import AttackFamily
 
@@ -105,9 +104,7 @@ class Base(DeclarativeBase):
 class Tenant(Base):
     __tablename__ = "tenants"
 
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        GUID(), primary_key=True, default=uuid.uuid4
-    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -204,29 +201,21 @@ class Node(Base):
 class Experiment(Base):
     __tablename__ = "experiments"
 
-    experiment_id: Mapped[uuid.UUID] = mapped_column(
-        GUID(), primary_key=True, default=uuid.uuid4
-    )
+    experiment_id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
     # Stored as the enum's value (str), never a bare hardcoded string —
     # DefenseConfig is the single source of truth (src/config.py).
     defense_config: Mapped[str] = mapped_column(String(32), nullable=False)
     model_id: Mapped[str] = mapped_column(String(64), nullable=False)
     injection_ratio: Mapped[float] = mapped_column(Numeric(), nullable=False)
     random_seed: Mapped[int] = mapped_column(Integer(), nullable=False)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    schedule_decisions: Mapped[list[ScheduleDecision]] = relationship(
-        back_populates="experiment"
-    )
+    schedule_decisions: Mapped[list[ScheduleDecision]] = relationship(back_populates="experiment")
 
     __table_args__ = (
         CheckConstraint(
-            "defense_config IN ("
-            + ", ".join(f"'{cfg.value}'" for cfg in DefenseConfig)
-            + ")",
+            "defense_config IN (" + ", ".join(f"'{cfg.value}'" for cfg in DefenseConfig) + ")",
             name="ck_experiments_defense_config_valid",
         ),
     )
@@ -235,9 +224,7 @@ class Experiment(Base):
 class ScheduleDecision(Base):
     __tablename__ = "schedule_decisions"
 
-    decision_id: Mapped[uuid.UUID] = mapped_column(
-        GUID(), primary_key=True, default=uuid.uuid4
-    )
+    decision_id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
     experiment_id: Mapped[uuid.UUID] = mapped_column(
         GUID(), ForeignKey("experiments.experiment_id"), nullable=False
     )
@@ -266,9 +253,7 @@ class ScheduleDecision(Base):
         ),
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     experiment: Mapped[Experiment] = relationship(back_populates="schedule_decisions")
     job: Mapped[Job] = relationship(back_populates="schedule_decisions")
