@@ -104,6 +104,29 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
+        "--duration-range",
+        type=int,
+        nargs=2,
+        metavar=("MIN_S", "MAX_S"),
+        default=None,
+        help="Synthetic per-task duration range in seconds (default 30 3600).",
+    )
+    parser.add_argument(
+        "--deadline-range",
+        type=int,
+        nargs=2,
+        metavar=("MIN_S", "MAX_S"),
+        default=None,
+        help="Synthetic job deadline range in seconds (default 60 7200).",
+    )
+    parser.add_argument(
+        "--min-share",
+        type=float,
+        default=0.05,
+        help="ILP anti-starvation floor: min fraction of each job's request granted "
+        "(0 disables). Default: %(default)s.",
+    )
+    parser.add_argument(
         "--database-url",
         default=None,
         help="Overrides Settings.database_url (e.g. sqlite:///./gate.db).",
@@ -120,7 +143,14 @@ def _build_jobs(args: argparse.Namespace) -> list[Job]:
     # Blueprint §13: the gate always runs against a plain, all-benign job
     # set — injection_ratio=0.0 is explicit here, not left to the
     # generator's own default, so that intent is visible at the call site.
-    generator = SyntheticTraceGenerator(seed=args.seed, num_tenants=max(1, args.num_jobs // 5))
+    kwargs: dict[str, tuple[int, int]] = {}
+    if args.duration_range:
+        kwargs["duration_range_s"] = (args.duration_range[0], args.duration_range[1])
+    if args.deadline_range:
+        kwargs["deadline_range_s"] = (args.deadline_range[0], args.deadline_range[1])
+    generator = SyntheticTraceGenerator(
+        seed=args.seed, num_tenants=max(1, args.num_jobs // 5), **kwargs
+    )
     return generator.generate(args.num_jobs, injection_ratio=0.0)
 
 
@@ -167,7 +197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     runner = BaselineExperimentRunner(
         encoder=TrustAwareStateEncoder(),
         llm_generator=LLMCandidateGenerator(backend),
-        ilp_refiner=IlpAllocationRefiner(),
+        ilp_refiner=IlpAllocationRefiner(min_share=args.min_share),
     )
 
     database_url = args.database_url or get_settings().database_url

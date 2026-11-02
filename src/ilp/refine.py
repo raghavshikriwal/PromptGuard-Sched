@@ -98,7 +98,25 @@ class IlpAllocationRefiner:
     Stateless — same instantiate-once-reuse-across-jobs pattern as
     `TrustAwareStateEncoder` and `LLMCandidateGenerator`. Holds no solver
     state between calls; a fresh `pulp.LpProblem` is built per job.
+
+    `min_share` is an anti-starvation floor (default 0.0 = disabled): every
+    resource the job demands gets at least this fraction of its request,
+    capped by whatever capacity is actually available. It only lifts
+    too-low proposals, it never raises a high one, so it cannot mask an
+    over-allocation attack.
     """
+
+    def __init__(self, min_share: float = 0.0) -> None:
+        if not 0.0 <= min_share <= 1.0:
+            raise ValueError("min_share must be within [0.0, 1.0]")
+        self._min_share = min_share
+
+    def _floor_for(self, demand: float, available: float) -> float:
+        """Lower bound for one resource's share: `min_share`, but never more
+        than the available capacity can actually back (and 0 if undemanded)."""
+        if demand <= _FEASIBILITY_EPS:
+            return _SHARE_LOWER_BOUND
+        return max(_SHARE_LOWER_BOUND, min(self._min_share, available / demand))
 
     def refine(
         self,
@@ -131,7 +149,11 @@ class IlpAllocationRefiner:
         problem = pulp.LpProblem(f"ilp_refine_{job.job_id.hex}", pulp.LpMinimize)
         share_vars = {
             field: pulp.LpVariable(
-                f"x_{field}", lowBound=_SHARE_LOWER_BOUND, upBound=_SHARE_UPPER_BOUND
+                f"x_{field}",
+                lowBound=self._floor_for(
+                    getattr(demand, field), getattr(capacity, field)
+                ),
+                upBound=_SHARE_UPPER_BOUND,
             )
             for field in RESOURCE_FIELDS
         }

@@ -7,14 +7,12 @@ into a single per-job call, with `defense_config` and `trace_id` threaded
 through every stage (blueprint §8 rules #1 and #2) and each stage's latency
 recorded against that `trace_id` (`stage_latencies`, blueprint §9).
 
-This module implements the `defense_config="none"` baseline path from
-README §8 step 5 — Guard (`src/guard/`) and the statistical Anomaly check
-(`src/anomaly/`) are Phase 7/8 work (blueprint §16) and are not yet
-implemented, so `SchedulingPipeline` does not import or call them. It does
-not silently pretend they ran, either: `persist_schedule_decision` records
-`guard_flagged=None` / `anomaly_flagged=None` rather than `False`, so a
-future `SELECT` can distinguish "guard didn't flag this" from "guard did
-not exist yet when this row was written."
+Defense layers run only when `defense_config` enables them: the guard
+(`src/guard/`, Layer 1) before the encoder, and the anomaly check
+(`src/anomaly/`, Layer 3) between the LLM and the ILP. When a layer is
+inactive its result is `None` and `persist_schedule_decision` stores
+`guard_flagged` / `anomaly_flagged` as NULL rather than `False`, so a
+`SELECT` can tell "not flagged" from "layer did not run".
 
 Deliberately not this module's job:
 - Deciding *what* `defense_config` to run — that is an experiment
@@ -36,8 +34,10 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
+from src.anomaly.check import AnomalyChecker, AnomalyResult
 from src.config import DefenseConfig, PipelineStage
 from src.encoder.state_encoder import EncodedState, TrustAwareStateEncoder
+from src.guard.classifier import GuardResult, RuleGuard
 from src.ilp.refine import AllocationDecision, IlpAllocationRefiner
 from src.llm.client import LLMCandidateGenerator, LLMCandidateResult
 from src.scheduler.capacity import CapacityLedger
@@ -65,6 +65,8 @@ class ScheduleOutcome:
     entitlement: float
     delta_j: float | None
     stage_latencies_ms: dict[PipelineStage, float] = field(default_factory=dict)
+    guard_result: GuardResult | None = None  # None: Layer 1 inactive for this config
+    anomaly_result: AnomalyResult | None = None  # None: Layer 3 inactive for this config
 
 
 class SchedulingPipeline:
@@ -84,10 +86,14 @@ class SchedulingPipeline:
         llm_generator: LLMCandidateGenerator,
         ilp_refiner: IlpAllocationRefiner,
         entitlement_cache: DrfEntitlementCache | None = None,
+        guard: RuleGuard | None = None,
+        anomaly_checker: AnomalyChecker | None = None,
     ) -> None:
         self._encoder = encoder
         self._llm_generator = llm_generator
         self._ilp_refiner = ilp_refiner
+        self._guard = guard if guard is not None else RuleGuard()
+        self._anomaly_checker = anomaly_checker if anomaly_checker is not None else AnomalyChecker()
         self._entitlement_cache = (
             entitlement_cache if entitlement_cache is not None else DrfEntitlementCache()
         )
@@ -109,9 +115,9 @@ class SchedulingPipeline:
             cluster_state: current trusted cluster snapshot.
             defense_config: which of C0-C4 to run — passed through
                 unchanged to the encoder (blueprint §8 rule #1); this
-                method never inspects it beyond that pass-through, since
-                guard/anomaly branching lives in those modules once they
-                exist, not here.
+                method uses its `guard_active` / `ilp_anomaly_active`
+                flags to decide which layers run, and passes it through
+                to the encoder for trust separation.
             active_jobs: every job (including `job` itself) concurrently
                 competing for `cluster_state`'s capacity, for DRF
                 entitlement purposes. Defaults to `[job]` alone — i.e.
@@ -141,9 +147,17 @@ class SchedulingPipeline:
         concurrent_jobs = active_jobs if active_jobs is not None else (job,)
         latencies_ms: dict[PipelineStage, float] = {}
 
+        guard_result: GuardResult | None = None
+        encoder_job = job
+        if defense_config.guard_active:
+            with _timed(PipelineStage.GUARD, latencies_ms):
+                guard_result = self._guard.score_job(job)
+                if guard_result.flagged:
+                    encoder_job = self._guard.redact(job)  # quarantine tenant text
+
         with _timed(PipelineStage.ENCODE, latencies_ms):
             encoded_state = self._encoder.encode(
-                job=job,
+                job=encoder_job,
                 cluster_state=cluster_state,
                 defense_config=defense_config,
                 trace_id=resolved_trace_id,
@@ -152,22 +166,34 @@ class SchedulingPipeline:
         with _timed(PipelineStage.LLM, latencies_ms):
             llm_result = self._llm_generator.generate_candidate(encoded_state=encoded_state)
 
-        available_capacity = capacity_ledger.remaining if capacity_ledger is not None else None
-        with _timed(PipelineStage.ILP, latencies_ms):
-            allocation = self._ilp_refiner.refine(
-                job=job,
-                cluster_state=cluster_state,
-                proposal=llm_result.proposal,
-                trace_id=resolved_trace_id,
-                available_capacity=available_capacity,
-            )
-
         entitlement = _resolve_entitlement(
             job=job,
             concurrent_jobs=concurrent_jobs,
             cluster_state=cluster_state,
             cache=self._entitlement_cache,
         )
+
+        proposal = llm_result.proposal
+        anomaly_result: AnomalyResult | None = None
+        if defense_config.ilp_anomaly_active:
+            with _timed(PipelineStage.ANOMALY, latencies_ms):
+                anomaly_result = self._anomaly_checker.check(
+                    proposal=proposal,
+                    demand=job.total_demand(),
+                    capacity=cluster_state.total_capacity(),
+                    entitlement=entitlement,
+                )
+                proposal = anomaly_result.proposal
+
+        available_capacity = capacity_ledger.remaining if capacity_ledger is not None else None
+        with _timed(PipelineStage.ILP, latencies_ms):
+            allocation = self._ilp_refiner.refine(
+                job=job,
+                cluster_state=cluster_state,
+                proposal=proposal,
+                trace_id=resolved_trace_id,
+                available_capacity=available_capacity,
+            )
         allocated_dominant_share = dominant_resource_share(
             allocation.allocated, cluster_state.total_capacity()
         )
@@ -186,6 +212,8 @@ class SchedulingPipeline:
             entitlement=entitlement,
             delta_j=delta_j,
             stage_latencies_ms=latencies_ms,
+            guard_result=guard_result,
+            anomaly_result=anomaly_result,
         )
 
     def schedule_and_persist(
@@ -223,6 +251,9 @@ class SchedulingPipeline:
             llm_result=outcome.llm_result,
             allocation=outcome.allocation,
             entitlement=outcome.entitlement,
+            guard_flagged=outcome.guard_result.flagged if outcome.guard_result else None,
+            guard_score=outcome.guard_result.score if outcome.guard_result else None,
+            anomaly_flagged=outcome.anomaly_result.flagged if outcome.anomaly_result else None,
         )
         persist_stage_latencies(
             session,

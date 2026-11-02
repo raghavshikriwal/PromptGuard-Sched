@@ -34,9 +34,17 @@ RESPONSE_SCHEMA_INSTRUCTIONS: str = (
     '  "disk_share": number in [0.0, 1.0]\n'
     '  "net_share": number in [0.0, 1.0]\n'
     '  "rationale": short string, at most 240 characters\n'
-    "Each *_share is the fraction of that resource's requested demand you "
-    "recommend granting this job, given the cluster state above. 1.0 means "
-    "grant the full request; 0.0 means grant none."
+    "Each *_share is the fraction of that resource's REQUESTED demand you "
+    "recommend granting this job: 1.0 grants the full request, 0.5 grants "
+    "half of it. It is NOT the fraction of the cluster the job should use. "
+    "Decide per job and per resource using only the system fields: compare "
+    "the job's total_demand with the cluster's total capacity, and consider "
+    "its priority, weight and deadline. If the cluster can comfortably fit "
+    "the whole request, grant close to 1.0. If the request is a large "
+    "fraction of cluster capacity, grant proportionally less. Different "
+    "jobs and different resources should get different shares when their "
+    "demands differ. Do not return 0.0 unless the job is invalid. Write a "
+    "rationale specific to this job."
 )
 
 

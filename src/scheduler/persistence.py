@@ -40,6 +40,9 @@ def persist_schedule_decision(
     llm_result: LLMCandidateResult,
     allocation: AllocationDecision,
     entitlement: float,
+    guard_flagged: bool | None = None,
+    guard_score: float | None = None,
+    anomaly_flagged: bool | None = None,
 ) -> ScheduleDecision:
     """Insert one `schedule_decisions` row for a completed pipeline run.
 
@@ -77,8 +80,8 @@ def persist_schedule_decision(
         experiment_id=experiment_id,
         job_id=allocation.job_id,
         trace_id=trace_id,
-        guard_flagged=None,  # Layer 1 (src/guard/) not yet implemented — blueprint §16 phase 7
-        guard_score=None,
+        guard_flagged=guard_flagged,  # None = layer inactive for this config, never False
+        guard_score=guard_score,
         llm_candidate={
             "model_id": llm_result.model_id,
             "attempts": llm_result.attempts,
@@ -91,7 +94,7 @@ def persist_schedule_decision(
             "objective_value": allocation.objective_value,
             "solver_status": allocation.solver_status,
         },
-        anomaly_flagged=None,  # Layer 3 (src/anomaly/) not yet implemented — blueprint §16 phase 8
+        anomaly_flagged=anomaly_flagged,
         dominant_entitlement=entitlement,
         allocated_share=allocated_share,
     )

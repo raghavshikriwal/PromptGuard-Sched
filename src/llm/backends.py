@@ -111,12 +111,32 @@ class HuggingFaceLLMBackend:
         import torch
 
         model, tokenizer = self._load()
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+        # Instruct models must see their chat template; a raw string makes
+        # them continue text instead of answering. Fall back to the raw
+        # prompt only for tokenizers that ship no template.
+        if getattr(tokenizer, "chat_template", None):
+            text = tokenizer.apply_chat_template(
+                [{"role": "user", "content": prompt}],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            add_special_tokens = False  # the template already inserted them
+        else:
+            text = prompt
+            add_special_tokens = True
+
+        inputs = tokenizer(text, return_tensors="pt", add_special_tokens=add_special_tokens).to(
+            model.device
+        )
         with torch.no_grad():
             output_ids = model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
                 do_sample=False,  # deterministic decoding: reproducibility (blueprint §16)
+                temperature=None,  # unset the model's default sampling params so
+                top_p=None,  # greedy decoding stays warning-free
+                top_k=None,
                 pad_token_id=tokenizer.eos_token_id,
             )
         generated_ids = output_ids[0][inputs["input_ids"].shape[1] :]

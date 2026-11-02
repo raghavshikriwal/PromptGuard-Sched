@@ -149,6 +149,7 @@ DEFAULT_DISK_RANGE_GB: tuple[float, float] = (1.0, 100.0)
 DEFAULT_NET_RANGE_MBPS: tuple[float, float] = (10.0, 1000.0)
 DEFAULT_DURATION_RANGE_S: tuple[int, int] = (30, 3600)
 DEFAULT_TRANSFER_RANGE_GB: tuple[float, float] = (0.1, 10.0)
+DEFAULT_DEADLINE_RANGE_S: tuple[int, int] = (60, 7200)
 
 # Placeholder marker for attack-labeled jobs when no real payload injector is
 # supplied. Deliberately inert text — never mistake this for an actual
@@ -161,9 +162,24 @@ AttackPayloadInjector = Callable[[str, AttackFamily], str]
 class SyntheticTraceGenerator:
     """Deterministic, seeded generator of valid `Job` DAGs for pre-trace development."""
 
-    def __init__(self, seed: int, num_tenants: int = 10) -> None:
+    def __init__(
+        self,
+        seed: int,
+        num_tenants: int = 10,
+        *,
+        duration_range_s: tuple[int, int] = DEFAULT_DURATION_RANGE_S,
+        deadline_range_s: tuple[int, int] = DEFAULT_DEADLINE_RANGE_S,
+    ) -> None:
         if num_tenants < 1:
             raise ValueError("num_tenants must be >= 1")
+        for name, (low, high) in (
+            ("duration_range_s", duration_range_s),
+            ("deadline_range_s", deadline_range_s),
+        ):
+            if low < 1 or high < low:
+                raise ValueError(f"{name} must satisfy 1 <= min <= max")
+        self._duration_range_s = duration_range_s
+        self._deadline_range_s = deadline_range_s
         self._seed = seed
         self._rng = random.Random(seed)
         self._job_counter = 0
@@ -235,7 +251,7 @@ class SyntheticTraceGenerator:
             job_id=job_id,
             tenant_id=self._rng.choice(self._tenant_ids),
             priority=self._rng.randint(0, PRIORITY_LEVELS - 1),
-            deadline_s=self._rng.choice([None, self._rng.randint(60, 7200)]),
+            deadline_s=self._rng.choice([None, self._rng.randint(*self._deadline_range_s)]),
             weight=round(self._rng.uniform(0.1, 10.0), 3),
             description=description,
             tasks=tasks,
@@ -254,7 +270,7 @@ class SyntheticTraceGenerator:
                 disk_gb=round(self._rng.uniform(*DEFAULT_DISK_RANGE_GB), 2),
                 net_mbps=round(self._rng.uniform(*DEFAULT_NET_RANGE_MBPS), 2),
             ),
-            est_duration_s=self._rng.randint(*DEFAULT_DURATION_RANGE_S),
+            est_duration_s=self._rng.randint(*self._duration_range_s),
         )
 
     def _random_dag_edges(self, tasks: Sequence[Task]) -> tuple[TaskEdge, ...]:
