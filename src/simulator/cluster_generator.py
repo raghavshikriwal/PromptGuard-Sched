@@ -28,13 +28,16 @@ Deliberately NOT this module's job:
 
 from __future__ import annotations
 
+from src.config import MAX_TARGET_UTILIZATION
 from src.simulator.ids import deterministic_uuid
 from src.simulator.models import ClusterState, Job, NodeCapacity, ResourceDemand
 
-# Utilization must be in (0, 1]; 0 has no sensible "capacity sized to hit
-# zero utilization" and would produce an unbounded/undefined cluster.
+# Utilization must be in (0, MAX_TARGET_UTILIZATION]; 0 has no sensible
+# "capacity sized to hit zero utilization" and would produce an unbounded
+# cluster. Values above 1.0 are deliberate: they model an oversubscribed
+# (contended) cluster, which attack experiments need (see src/config.py).
 _MIN_TARGET_UTILIZATION: float = 1e-6
-_MAX_TARGET_UTILIZATION: float = 1.0
+_MAX_TARGET_UTILIZATION: float = MAX_TARGET_UTILIZATION
 
 
 class ClusterSizingError(ValueError):
@@ -72,8 +75,10 @@ def size_cluster_for_target_utilization(
         target_utilization: the aggregate utilization every resource
             reaches if every job is granted exactly its full demand,
             e.g. `0.766` to reproduce the CPU-utilization axis of the
-            LLMSched reference figure (blueprint §11). Must be in
-            `(0.0, 1.0]`.
+            LLMSched reference figure (blueprint §11). Values above 1.0
+            size an oversubscribed cluster (aggregate demand exceeds
+            capacity), used by the attack experiments. Must be in
+            `(0.0, MAX_TARGET_UTILIZATION]`.
         num_nodes: how many homogeneous `NodeCapacity` nodes to split the
             sized total across. Must be >= 1. Node count does not affect
             aggregate utilization (only `src/ilp/`'s per-job feasibility
@@ -84,7 +89,7 @@ def size_cluster_for_target_utilization(
 
     Raises:
         ClusterSizingError: `jobs` is empty, demands nothing on any
-            resource, `target_utilization` is out of `(0.0, 1.0]`, or
+            resource, `target_utilization` is out of range, or
             `num_nodes < 1`.
     """
     if not jobs:
@@ -93,7 +98,8 @@ def size_cluster_for_target_utilization(
         raise ClusterSizingError(f"num_nodes must be >= 1, got {num_nodes}")
     if not _MIN_TARGET_UTILIZATION <= target_utilization <= _MAX_TARGET_UTILIZATION:
         raise ClusterSizingError(
-            f"target_utilization must be in (0.0, 1.0], got {target_utilization:g}"
+            f"target_utilization must be in (0.0, {_MAX_TARGET_UTILIZATION:g}], "
+            f"got {target_utilization:g}"
         )
 
     demand = total_job_demand(jobs)

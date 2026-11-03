@@ -1,6 +1,6 @@
 """Print each job's LLM proposal vs final allocation from a gate database.
 
-python diag_gate.py gate_qwen_trial.db
+python scripts/diag_gate.py gate_qwen_trial.db
 """
 
 import json

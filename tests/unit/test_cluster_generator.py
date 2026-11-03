@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from src.config import ATTACK_EVAL_TARGET_UTILIZATION, MAX_TARGET_UTILIZATION
 from src.simulator.cluster_generator import (
     ClusterSizingError,
     size_cluster_for_target_utilization,
@@ -69,7 +70,16 @@ class TestSizeClusterForTargetUtilization:
         with pytest.raises(ClusterSizingError, match="zero on every resource"):
             size_cluster_for_target_utilization([zero_job], target_utilization=0.5, num_nodes=1)
 
-    @pytest.mark.parametrize("bad_utilization", [0.0, -0.1, 1.5])
+    def test_oversubscribed_cluster_has_less_capacity_than_demand(self) -> None:
+        jobs = [_job(cpu=30.0)]
+        cluster = size_cluster_for_target_utilization(
+            jobs, target_utilization=ATTACK_EVAL_TARGET_UTILIZATION, num_nodes=2
+        )
+        assert ATTACK_EVAL_TARGET_UTILIZATION > 1.0
+        assert cluster.total_capacity().cpu < total_job_demand(jobs).cpu
+        assert cluster.total_capacity().cpu == pytest.approx(30.0 / ATTACK_EVAL_TARGET_UTILIZATION)
+
+    @pytest.mark.parametrize("bad_utilization", [0.0, -0.1, MAX_TARGET_UTILIZATION + 1.0])
     def test_invalid_utilization_raises(self, bad_utilization: float) -> None:
         with pytest.raises(ClusterSizingError, match="target_utilization"):
             size_cluster_for_target_utilization(

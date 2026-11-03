@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from db.migrations.models import Base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from src.config import BASELINE_REFERENCE_CPU_UTILIZATION, DefenseConfig, get_settings
+from src.config import ATTACK_EVAL_TARGET_UTILIZATION, DefenseConfig, get_settings
 from src.encoder.state_encoder import TrustAwareStateEncoder
 from src.ilp.refine import IlpAllocationRefiner
 from src.llm.client import LLMCandidateGenerator
@@ -47,7 +47,10 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--num-jobs", type=int, default=200)
     parser.add_argument("--num-nodes", type=int, default=20)
     parser.add_argument(
-        "--target-utilization", type=float, default=BASELINE_REFERENCE_CPU_UTILIZATION
+        "--target-utilization",
+        type=float,
+        default=ATTACK_EVAL_TARGET_UTILIZATION,
+        help="Aggregate demand / capacity. Must be > 1.0 for attacks to have headroom.",
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(

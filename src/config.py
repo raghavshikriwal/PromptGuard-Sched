@@ -84,6 +84,16 @@ BASELINE_REFERENCE_CPU_UTILIZATION: float = 0.766
 BASELINE_REFERENCE_SLA_VIOLATION_RATE: float = 0.119
 BASELINE_REFERENCE_DRF_FAIRNESS: float = 0.823
 
+# Attack/defense experiments need a *contended* cluster. At target utilization
+# <= 1.0 every job's DRF entitlement equals its own demand, and the ILP never
+# grants more than demand, so Delta(J) cannot go positive and ASR is
+# structurally 0. Aggregate demand / capacity > 1 creates real contention.
+# The baseline gate keeps BASELINE_REFERENCE_CPU_UTILIZATION; only the attack
+# experiments (run_ablation, run_injection_sweep) default to this value.
+ATTACK_EVAL_TARGET_UTILIZATION: float = 1.5
+# Upper sanity bound for `size_cluster_for_target_utilization` (typo guard).
+MAX_TARGET_UTILIZATION: float = 4.0
+
 
 class Settings(BaseSettings):
     """Runtime settings loaded from environment / `.env` (see `.env.example`).

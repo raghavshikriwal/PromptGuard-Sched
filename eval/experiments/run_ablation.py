@@ -43,7 +43,7 @@ from eval.experiments.run_baseline_gate import _build_backend
 from eval.metrics.attack_metrics import AttackMetricsError, compute_attack_metrics
 from eval.statistics.summary import mean_ci, paired_difference_ci, percentile
 from src.config import (
-    BASELINE_REFERENCE_CPU_UTILIZATION,
+    ATTACK_EVAL_TARGET_UTILIZATION,
     TAU_ASR_DEFAULT,
     DefenseConfig,
     get_settings,
@@ -89,7 +89,10 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--num-jobs", type=int, default=30)
     parser.add_argument("--num-nodes", type=int, default=20)
     parser.add_argument(
-        "--target-utilization", type=float, default=BASELINE_REFERENCE_CPU_UTILIZATION
+        "--target-utilization",
+        type=float,
+        default=ATTACK_EVAL_TARGET_UTILIZATION,
+        help="Aggregate demand / capacity. Must be > 1.0 for attacks to have headroom.",
     )
     parser.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     parser.add_argument("--ratio", type=float, default=0.10, help="Injection ratio in [0, 1].")
