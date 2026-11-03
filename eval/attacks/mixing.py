@@ -11,9 +11,10 @@ from __future__ import annotations
 import random
 from collections.abc import Sequence
 
-from eval.attacks.payloads import payloads_for
 from src.simulator.ids import deterministic_uuid
 from src.simulator.models import AttackFamily, Job
+
+from eval.attacks.payloads import payloads_for
 
 _MAX_DESCRIPTION_LEN = 4096  # Job.description max_length
 
@@ -49,7 +50,7 @@ def mix_attacks(benign_jobs: Sequence[Job], *, ratio: float, seed: int) -> list[
         description = f"{original.description[: max(room, 0)]} {payload.text}".strip()
         mixed[job_index] = original.model_copy(
             update={
-                "job_id": deterministic_uuid("attack", seed, original.job_id),
+                "job_id": deterministic_uuid("attack", seed, str(original.job_id)),
                 "description": description,
                 "is_synthetic_attack": True,
                 "attack_payload_type": family,

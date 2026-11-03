@@ -8,9 +8,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import Session
-
 from db.migrations.models import Base, Experiment, ScheduleDecision
 from eval.experiments.baseline_runner import (
     BaselineExperimentRunner,
@@ -18,6 +15,8 @@ from eval.experiments.baseline_runner import (
     BaselineRunResult,
 )
 from eval.metrics.baseline_metrics import BaselineMetricsError, compute_baseline_metrics
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.orm import Session
 from src.config import DefenseConfig
 from src.encoder.state_encoder import TrustAwareStateEncoder
 from src.ilp.refine import IlpAllocationRefiner

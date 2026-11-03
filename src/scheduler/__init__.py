@@ -12,7 +12,7 @@ working while `src.scheduler.fairness` stays a cheap leaf import.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.scheduler.fairness import (
     DrfEntitlementError,
@@ -36,7 +36,7 @@ __all__ = [
 _LAZY = {"ScheduleOutcome", "SchedulingPipeline"}
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> object:
     if name in _LAZY:
         from src.scheduler import pipeline
 

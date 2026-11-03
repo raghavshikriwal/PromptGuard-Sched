@@ -8,7 +8,6 @@ import base64
 import re
 
 import pytest
-
 from eval.attacks.payloads import (
     PAYLOAD_LIBRARY,
     PAYLOAD_LIBRARY_VERSION,

@@ -32,11 +32,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
 from db.migrations.models import Job as JobRow
 from db.migrations.models import ScheduleDecision
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 DEFAULT_THRESHOLDS: tuple[float, ...] = (0.10, 0.25, 0.50)
 

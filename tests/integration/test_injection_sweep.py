@@ -11,15 +11,14 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import Session
-
 from db.migrations.models import Base, Experiment
 from db.migrations.models import Job as JobRow
 from eval.experiments import run_injection_sweep as sweep
 from eval.experiments.baseline_runner import BaselineExperimentRunner
 from eval.experiments.injection_runner import run_injection_sweep
 from eval.metrics.attack_metrics import compute_attack_metrics
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.orm import Session
 from src.config import DefenseConfig
 from src.encoder.state_encoder import TrustAwareStateEncoder
 from src.ilp.refine import IlpAllocationRefiner

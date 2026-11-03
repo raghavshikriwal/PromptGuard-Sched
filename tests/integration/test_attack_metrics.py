@@ -11,13 +11,12 @@ from collections.abc import Iterator
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
 from db.migrations.models import Base, Experiment, ScheduleDecision
 from db.migrations.models import Job as JobRow
 from db.migrations.models import Tenant as TenantRow
 from eval.metrics.attack_metrics import AttackMetricsError, compute_attack_metrics
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from src.simulator.models import AttackFamily
 
 # (is_attack, family, allocated_share, entitlement)  ->  Δ = (share - ent) / ent

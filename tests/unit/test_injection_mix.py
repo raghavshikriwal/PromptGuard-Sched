@@ -5,9 +5,8 @@ from __future__ import annotations
 from collections import Counter
 
 import pytest
-
-from eval.attacks.payloads import payloads_for
 from eval.attacks.mixing import mix_attacks
+from eval.attacks.payloads import payloads_for
 from src.simulator.models import AttackFamily, Job
 from src.simulator.trace_loader import SyntheticTraceGenerator
 

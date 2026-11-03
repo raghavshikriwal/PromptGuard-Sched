@@ -150,9 +150,7 @@ class IlpAllocationRefiner:
         share_vars = {
             field: pulp.LpVariable(
                 f"x_{field}",
-                lowBound=self._floor_for(
-                    getattr(demand, field), getattr(capacity, field)
-                ),
+                lowBound=self._floor_for(getattr(demand, field), getattr(capacity, field)),
                 upBound=_SHARE_UPPER_BOUND,
             )
             for field in RESOURCE_FIELDS

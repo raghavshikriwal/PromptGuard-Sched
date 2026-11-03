@@ -19,10 +19,16 @@ import argparse
 import sys
 from collections.abc import Sequence
 
+from db.migrations.models import Base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from src.config import BASELINE_REFERENCE_CPU_UTILIZATION, DefenseConfig, get_settings
+from src.encoder.state_encoder import TrustAwareStateEncoder
+from src.ilp.refine import IlpAllocationRefiner
+from src.llm.client import LLMCandidateGenerator
+from src.simulator.cluster_generator import size_cluster_for_target_utilization
+from src.simulator.trace_loader import SyntheticTraceGenerator
 
-from db.migrations.models import Base
 from eval.attacks.payloads import PAYLOAD_LIBRARY_VERSION
 from eval.experiments.baseline_runner import BaselineExperimentRunner, BaselineRunnerError
 from eval.experiments.injection_runner import (
@@ -32,12 +38,6 @@ from eval.experiments.injection_runner import (
 )
 from eval.experiments.run_baseline_gate import _build_backend
 from eval.metrics.attack_metrics import DEFAULT_THRESHOLDS, AttackMetrics, compute_attack_metrics
-from src.config import BASELINE_REFERENCE_CPU_UTILIZATION, DefenseConfig, get_settings
-from src.encoder.state_encoder import TrustAwareStateEncoder
-from src.ilp.refine import IlpAllocationRefiner
-from src.llm.client import LLMCandidateGenerator
-from src.simulator.cluster_generator import size_cluster_for_target_utilization
-from src.simulator.trace_loader import SyntheticTraceGenerator
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:

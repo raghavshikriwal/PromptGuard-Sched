@@ -29,11 +29,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
+from src.config import DefenseConfig
+from src.simulator.models import ClusterState, Job
 
 from eval.attacks.mixing import mix_attacks
 from eval.experiments.baseline_runner import BaselineExperimentRunner, BaselineRunResult
-from src.config import DefenseConfig
-from src.simulator.models import ClusterState, Job
 
 DEFAULT_INJECTION_RATIOS: tuple[float, ...] = (0.0, 0.01, 0.05, 0.10)
 

@@ -18,11 +18,10 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from eval.attacks.payloads import (
-    AttackPayload,
     PAYLOAD_LIBRARY,
     PAYLOAD_LIBRARY_VERSION,
+    AttackPayload,
     library_digest,
     payloads_for,
 )
