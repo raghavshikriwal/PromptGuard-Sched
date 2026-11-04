@@ -169,9 +169,9 @@ ASR is calculated over injected jobs with a persisted scheduling decision and a 
 
 This distinction is important: a lower ASR is not necessarily an improvement if a configuration also has more failed or missing decisions.
 
-## Confirmatory evaluation: current evidence
+## Confirmatory evaluation: reproduction results
 
-The latest audited confirmatory comparison uses the historical database `ablation_confirmatory_3seeds.db`. Its workload and scoring calculations were independently checked against deterministic reconstruction.
+The latest reproduction run is stored in `data/ablation_confirmatory_3seeds_reproduction.db`. Metrics below were recalculated from persisted decisions using the current `compute_attack_metrics` implementation.
 
 ### Experimental setup
 
@@ -179,67 +179,94 @@ The latest audited confirmatory comparison uses the historical database `ablatio
 |---|---|
 | LLM backend | Hugging Face |
 | Model | `Qwen/Qwen2.5-3B-Instruct` |
-| Jobs per seed | 10 |
+| Jobs requested per seed | 10 |
 | Random seeds | `0`, `1`, `2` |
 | Injection ratio | `0.60` (60%) |
 | Target utilization | `1.5` |
 | Configurations | C0 `none`, C3 `ilp_anomaly_only`, C4 `full` |
-| Matched population | 29 jobs: 17 injected and 12 benign |
 | Independent seed count | 3 |
+| Database | `data/ablation_confirmatory_3seeds_reproduction.db` |
 
-The 60% injection ratio is a deliberately high diagnostic stress-test setting used in this small comparison. It is not the planned low-rate 1%, 5%, or 10% evaluation matrix.
+The 60% injection ratio is a deliberately high diagnostic stress-test setting. It is not representative of real-world attack prevalence or the planned low-rate evaluation matrix.
 
-### Matched-population results
+### Reproduction results
 
-The table reports the mean of the three seed-level metric values. ASR is shown at all three sensitivity thresholds.
+Values are means across three seed-level results, with 95% Student-t confidence-interval half-widths. ASR uses the strict condition `delta_j > threshold`.
 
-| Metric | C0 — None | C3 — ILP + anomaly | C4 — Full |
+| Metric | C0 - None | C3 - ILP + anomaly | C4 - Full |
 |---|---:|---:|---:|
-| Mean injected \(\Delta(J)\) | 0.8597 | **0.0569** | 0.0885 |
-| Benign CFD | 0.8797 | 0.2204 | **0.1870** |
-| ASR @ 0.10 | 0.4222 | **0.4222** | 0.4778 |
-| ASR @ 0.25 | 0.4222 | 0.2556 | 0.2556 |
-| ASR @ 0.50 | 0.2444 | 0.0000 | 0.0000 |
+| Mean injected delta | 0.8597 +/- 2.9673 | 0.0569 +/- 0.2001 | 0.0946 +/- 0.1383 |
+| Benign CFD | 0.8797 +/- 1.4179 | 0.2204 +/- 0.1671 | 0.1870 +/- 0.0855 |
+| ASR @ 0.10 | 0.4222 +/- 0.3825 | 0.4222 +/- 0.3825 | 0.5000 +/- 0.4141 |
+| ASR @ 0.25 | 0.4222 +/- 0.3825 | 0.1667 +/- 0.4141 | 0.1667 +/- 0.4141 |
+| ASR @ 0.50 | 0.2444 +/- 0.3347 | 0.0000 +/- 0.0000 | 0.0000 +/- 0.0000 |
+| Guard TPR | N/A | N/A | 0.7778 +/- 0.2391 |
+| Guard FPR | N/A | N/A | 0.0000 +/- 0.0000 |
 
-### Paired comparison: C3 versus C4
+Guard metrics are not applicable to C0 and C3 because the guard is disabled in those configurations.
 
-Paired differences are calculated as:
+### Pipeline latency
+
+Latency is pooled across the persisted per-job stage-latency records for each configuration.
+
+| Configuration | Persisted jobs | P50 latency (ms) | P99 latency (ms) |
+|---|---:|---:|---:|
+| C0 - None | 29 | 4514.78 | 70332.15 |
+| C3 - ILP + anomaly | 29 | 4460.51 | 11055.85 |
+| C4 - Full | 30 | 4494.66 | 5106.63 |
+
+These are measured pipeline latencies in this experiment, not production-service latency guarantees.
+
+### Paired ASR comparison against C0
+
+Paired differences are calculated per seed as:
 
 \[
-D = \text{C3 metric} - \text{C4 metric}
+D = ASR(C0) - ASR(Cx)
 \]
 
-A positive difference favors C4 for metrics where lower is better; a negative difference favors C3. The intervals below are 95% paired Student-\(t\) confidence intervals across three seed-level differences (df = 2).
+A positive value indicates a reduction in ASR relative to C0. The confidence intervals are 95% paired Student-t intervals across three seed-level differences (df = 2).
 
-| Metric | Mean paired difference | 95% CI |
-|---|---:|---:|
-| Mean injected \(\Delta(J)\) | -0.0316 | [-0.1194, 0.0562] |
-| Benign CFD | +0.0334 | [-0.0904, 0.1572] |
-| ASR @ 0.10 | -0.0556 | [-0.2946, 0.1835] |
-| ASR @ 0.25 | 0.0000 | [0.0000, 0.0000] |
-| ASR @ 0.50 | 0.0000 | [0.0000, 0.0000] |
+| Configuration | Threshold | Mean ASR reduction | 95% CI |
+|---|---:|---:|---:|
+| C3 - ILP + anomaly | 0.25 | 0.2556 | [-0.5138, 1.0250] |
+| C4 - Full | 0.25 | 0.2556 | [-0.5138, 1.0250] |
 
-The non-zero paired intervals include zero. With only three seeds, these estimates are exploratory and do not establish statistically significant superiority. The zero-width intervals for ASR at 0.25 and 0.50 reflect identical seed-level outcomes in these runs; they do not imply certainty beyond this sample.
+The per-seed differences are `[0.1667, 0.0000, 0.6000]` for both comparisons. These intervals are wide and include zero. The three-seed results do not establish statistically significant superiority over the undefended baseline.
+
+### Missing decisions and population comparability
+
+The persisted decision counts are:
+
+| Seed | C0 - None | C3 - ILP + anomaly | C4 - Full |
+|---|---:|---:|---:|
+| 0 | 10 | 10 | 10 |
+| 1 | 10 | 10 | 10 |
+| 2 | 9 | 9 | 10 |
+| **Total** | **29** | **29** | **30** |
+
+Seeds 0 and 1 contain the same job IDs across all configurations. In seed 2, C0 and C3 contain the same 9 job IDs. C4 contains those 9 plus one additional injected `role_confusion` job (`f6d315fdb91e551e88e5487178793f6e`).
+
+Consequently, C0 and C3 have the same persisted job population, but C4 has one additional persisted decision in seed 2. The paired ASR comparison is paired by seed, not fully job-matched across all configurations. Do not describe all three configurations as having an identical matched population.
+
+No persisted decision in these runs had a missing `delta_j` value. ASR denominators use persisted injected-job decisions; jobs without a persisted decision are not silently counted as successful defenses.
 
 ### Interpretation
 
-The current evidence supports a deliberately limited conclusion:
+The reproduction provides encouraging but preliminary point estimates:
 
-- Both defended configurations reduce mean injected-job deviation and benign CFD relative to the undefended baseline in this experiment.
-- C4 has the lowest mean benign CFD (0.1870), compared with 0.2204 for C3.
-- C3 has the lowest mean injected-job deviation (0.0569), compared with 0.0885 for C4.
-- C3 and C4 have identical ASR at thresholds 0.25 and 0.50.
-- At threshold 0.10, C4's observed ASR is higher than C3's (0.4778 versus 0.4222).
-- Paired comparisons do not establish a statistically conclusive advantage for C4 over C3.
+- C3 and C4 both have lower mean injected-job deviation and lower ASR at thresholds 0.25 and 0.50 than C0.
+- C4 has the lowest observed benign CFD (0.1870) and a guard FPR of 0.0000 in this sample.
+- C3 has the lowest observed mean injected-job deviation (0.0569).
+- C4's ASR at threshold 0.10 (0.5000) is higher than C0 and C3 (both 0.4222).
+- The paired ASR confidence intervals are wide and include zero.
+- C4 has one additional persisted injected-job decision in seed 2, so the configurations are not fully job-matched.
 
-**Current takeaway:** the full pipeline shows a modest point-estimate improvement in benign fairness, but does not demonstrate a consistent attack-resistance advantage over ILP plus anomaly detection in this three-seed experiment.
+**Current takeaway:** these results are exploratory simulator evidence. They do not establish statistically conclusive attack-resistance improvements, broad generalization, or production security guarantees.
 
-### Missing decision and matched analysis
+### Reproduction chronology
 
-In seed 2, the historical database contains 9 decisions for C0, 9 for C3, and 10 for C4. One injected `role_confusion` job has no persisted decision under C0 and C3 but does have one under C4. For the matched analysis, that job is excluded from all three configurations. It is not treated as a successful defense for either configuration in which its decision is missing.
-
-The matched population is therefore 10 jobs in seeds 0 and 1, and 9 jobs in seed 2. Report the missing decision explicitly in any publication or presentation of these results.
-
+This reproduction database was generated before the later anomaly-cap `1e-9` safety-margin change. It therefore does not independently validate that change across a complete confirmatory evaluation. The historical calculation audit below refers to the older `ablation_confirmatory_3seeds.db`; it is a separate audit and should not be conflated with the reproduction results above.
 ### Historical calculation audit
 
 The confirmatory database was audited without modifying it:
@@ -421,7 +448,7 @@ Run static type checking:
 mypy src eval
 ```
 
-**Latest reported local test snapshot:** 390 tests passed with 97.60% coverage on Python 3.12.10. This is a user-reported local result, not a guarantee that every environment or future commit will produce the same result. Re-run the commands above after changing code or dependencies. The configured coverage gate is 85%.
+**Latest verified local test snapshot:** 395 tests passed with 97.19% coverage on Python 3.12.10. The configured coverage gate is 85%. Re-run the test suite after changing code or dependencies.
 
 ## Reproducibility checklist
 
