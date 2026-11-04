@@ -55,7 +55,10 @@ class AnomalyChecker:
         delta_j = (share - entitlement) / entitlement
         if delta_j <= self._tau:
             return AnomalyResult(proposal, False, delta_j)
-        scale = entitlement * (1.0 + self._tau) / share
+        # Stay slightly below the strict ASR boundary to prevent
+        # floating-point rounding from persisting delta_j > tau.
+        safe_tau = max(0.0, self._tau - 1e-9)
+        scale = entitlement * (1.0 + safe_tau) / share
         capped = proposal.model_copy(
             update={
                 "cpu_share": proposal.cpu_share * scale,

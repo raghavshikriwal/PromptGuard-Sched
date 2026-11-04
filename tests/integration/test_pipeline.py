@@ -221,6 +221,7 @@ class TestSchedulingPipelineIntegration:
 
     def test_adversarial_proposal_is_flagged_and_final_allocation_is_capped(
         self,
+        session: Session,
         job: Job,
         cluster_state: ClusterState,
     ) -> None:
@@ -258,7 +259,11 @@ class TestSchedulingPipelineIntegration:
         )
         active_jobs = (job, *competitors)
 
-        outcome = adversarial_pipeline.schedule_job(
+        experiment = _seed_job_and_experiment(session, job)
+
+        outcome = adversarial_pipeline.schedule_and_persist(
+            session,
+            experiment_id=experiment.experiment_id,
             job=job,
             cluster_state=cluster_state,
             defense_config=DefenseConfig.ILP_ANOMALY_ONLY,
@@ -299,7 +304,7 @@ class TestSchedulingPipelineIntegration:
             cluster_state.total_capacity(),
         )
 
-        assert capped_share <= outcome.entitlement * 1.25 + 1e-9
+        assert capped_share <= outcome.entitlement * 1.25
 
         # Verify that ILP did not raise the final allocation above the cap.
         achieved_share = dominant_resource_share(
@@ -308,8 +313,17 @@ class TestSchedulingPipelineIntegration:
         )
 
         assert outcome.delta_j is not None
-        assert outcome.delta_j <= 0.25 + 1e-9
-        assert achieved_share <= outcome.entitlement * 1.25 + 1e-9
+        assert outcome.delta_j <= 0.25
+        assert achieved_share <= outcome.entitlement * 1.25
+
+        # Verify SQLite's generated delta_j using the raw stored value.
+        session.commit()
+        persisted_delta = session.connection().exec_driver_sql(
+            "SELECT delta_j FROM schedule_decisions"
+        ).scalar_one()
+
+        assert persisted_delta is not None
+        assert float(persisted_delta) <= 0.25
 
     def test_active_jobs_must_include_the_scheduled_job(
         self,

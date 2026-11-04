@@ -27,19 +27,33 @@ def test_proposal_within_tau_passes_unchanged() -> None:
     assert result.proposal == proposal
 
 
-def test_over_allocation_is_capped_to_entitlement_times_one_plus_tau() -> None:
-    result = AnomalyChecker(tau=0.25).check(
-        proposal=_proposal(1.0), demand=_DEMAND, capacity=_CAPACITY, entitlement=0.25
+def test_over_allocation_is_capped_strictly_below_tau() -> None:
+    tau = 0.25
+    entitlement = 0.25
+
+    result = AnomalyChecker(tau=tau).check(
+        proposal=_proposal(1.0),
+        demand=_DEMAND,
+        capacity=_CAPACITY,
+        entitlement=entitlement,
     )
+
     assert result.flagged
     capped = result.proposal
+
     allocated = ResourceDemand(
         cpu=capped.cpu_share * _DEMAND.cpu,
         mem_gb=capped.mem_share * _DEMAND.mem_gb,
         disk_gb=capped.disk_share * _DEMAND.disk_gb,
         net_mbps=capped.net_share * _DEMAND.net_mbps,
     )
-    assert dominant_resource_share(allocated, _CAPACITY) == pytest.approx(0.25 * 1.25)
+
+    achieved_delta = (
+        dominant_resource_share(allocated, _CAPACITY) - entitlement
+    ) / entitlement
+
+    assert achieved_delta <= tau
+    assert achieved_delta == pytest.approx(tau - 1e-9, abs=1e-12)
 
 
 def test_zero_entitlement_is_never_flagged() -> None:

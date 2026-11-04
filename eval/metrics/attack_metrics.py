@@ -34,7 +34,7 @@ from uuid import UUID
 
 from db.migrations.models import Job as JobRow
 from db.migrations.models import ScheduleDecision
-from sqlalchemy import select
+from sqlalchemy import Float, cast, select
 from sqlalchemy.orm import Session
 
 DEFAULT_THRESHOLDS: tuple[float, ...] = (0.10, 0.25, 0.50)
@@ -89,7 +89,7 @@ def compute_attack_metrics(
         select(
             JobRow.is_synthetic_attack,
             JobRow.attack_payload_type,
-            ScheduleDecision.delta_j,
+            cast(ScheduleDecision.delta_j, Float).label("delta_j"),
         )
         .join(JobRow, JobRow.job_id == ScheduleDecision.job_id)
         .where(ScheduleDecision.experiment_id == experiment_id)

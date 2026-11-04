@@ -160,3 +160,20 @@ class TestComputeAttackMetrics:
         metrics = compute_attack_metrics(session, experiment_id=_seed(session, _ROWS))
         with pytest.raises(KeyError):
             metrics.at(0.33)
+
+
+    def test_asr_preserves_sqlite_float_precision_at_threshold(
+        self, session: Session
+    ) -> None:
+        # SQLite evaluates this generated delta as approximately
+        # 0.25000000000000006. Numeric ORM conversion previously rounded
+        # it to Decimal("0.2500000000"), incorrectly making ASR zero.
+        rows: list[_Row] = [
+            (True, _DIRECT, 0.2018724868475381, 0.16149798947803048),
+        ]
+        metrics = compute_attack_metrics(
+            session, experiment_id=_seed(session, rows)
+        )
+
+        assert metrics.at(0.25).successful_attacks == 1
+        assert metrics.at(0.25).asr == pytest.approx(1.0)
