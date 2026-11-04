@@ -135,3 +135,20 @@ class TestComputeDeltaJ:
 
     def test_zero_entitlement_is_none(self) -> None:
         assert compute_delta_j(0.5, 0.0) is None
+
+def test_unconstrained_resource_job_continues_after_cpu_bottleneck():
+    job_a, job_b, job_c = uuid4(), uuid4(), uuid4()
+
+    demands = {
+        job_a: _demand(cpu=100.0),
+        job_b: _demand(cpu=100.0),
+        job_c: _demand(mem_gb=100.0),
+    }
+    weights = {job_a: 1.0, job_b: 1.0, job_c: 1.0}
+    capacity = _demand(cpu=100.0, mem_gb=100.0)
+
+    entitlements = compute_drf_entitlements(demands, weights, capacity)
+
+    assert entitlements[job_a] == pytest.approx(0.5, abs=1e-4)
+    assert entitlements[job_b] == pytest.approx(0.5, abs=1e-4)
+    assert entitlements[job_c] == pytest.approx(1.0, abs=1e-4)
