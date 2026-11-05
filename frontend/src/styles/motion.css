@@ -1,0 +1,65 @@
+/*
+ * Motion, modelled on apple.com: one long ease-out curve, a short rise (fade + translateY),
+ * scroll-triggered once, and a staggered load-in for the hero only.
+ * These are approximations of the visible behaviour, not Apple's own code.
+ * Everything is disabled under prefers-reduced-motion.
+ */
+:root {
+  --ease-apple: cubic-bezier(0.28, 0.11, 0.32, 1);
+}
+
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 40px, 0);
+  transition:
+    opacity 900ms var(--ease-apple),
+    transform 900ms var(--ease-apple);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.reveal[data-visible="true"] {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+}
+
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hero-in {
+  animation: hero-in 1000ms var(--ease-apple) both;
+  animation-delay: var(--hero-delay, 0ms);
+}
+
+/* Bars grow from the left when their row scrolls into view. */
+.bar-grow {
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 1100ms var(--ease-apple);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+[data-visible="true"] .bar-grow {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .bar-grow {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .hero-in {
+    animation: none;
+  }
+}

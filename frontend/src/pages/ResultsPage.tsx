@@ -1,5 +1,8 @@
 import { useState } from "react";
 import AsrChart from "../components/AsrChart";
+import Band from "../components/Band";
+import Reveal from "../components/Reveal";
+import { CARD, H1, H2, pillToggle, cssVars } from "../components/ui";
 import { useDataset } from "../hooks/useDataset";
 import {
   formatMeanCi,
@@ -20,7 +23,7 @@ function CampaignView({ campaign, dataset }: { campaign: Campaign; dataset: Data
   );
 
   return (
-    <div className="mt-6 space-y-6">
+    <div className="mt-10 space-y-8">
       <div
         role="group"
         aria-label="Success threshold"
@@ -33,53 +36,53 @@ function CampaignView({ campaign, dataset }: { campaign: Campaign; dataset: Data
             type="button"
             aria-pressed={value === tau}
             onClick={() => setTau(value)}
-            className={`rounded border border-line px-3 py-1 text-sm ${
-              value === tau ? "bg-ink text-bg" : "bg-surface"
-            }`}
+            className={`${pillToggle(value === tau)} !py-1.5 !text-sm numeric`}
           >
             {value.toFixed(2)}
           </button>
         ))}
       </div>
 
-      <AsrChart rows={campaign.rows} tau={tau} />
+      <div className={`${CARD} bg-surface`}>
+        <AsrChart rows={campaign.rows} tau={tau} />
+      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[34rem] text-left text-sm">
           <caption className="sr-only">Attack success rate by defense configuration</caption>
-          <thead className="border-b-2 border-ink">
+          <thead className="text-muted">
             <tr>
-              <th scope="col" className="py-2 pr-3">
+              <th scope="col" className="py-3 pr-4 font-medium">
                 Config
               </th>
-              <th scope="col" className="py-2 pr-3">
+              <th scope="col" className="py-3 pr-4 font-medium">
                 ASR (mean ± 95% CI)
               </th>
-              <th scope="col" className="py-2 pr-3">
+              <th scope="col" className="py-3 pr-4 font-medium">
                 Seeds
               </th>
-              <th scope="col" className="py-2 pr-3">
+              <th scope="col" className="py-3 pr-4 font-medium">
                 Injected per run
               </th>
-              <th scope="col" className="py-2 pr-3">
+              <th scope="col" className="py-3 pr-4 font-medium">
                 Reduction vs C0
               </th>
-              <th scope="col" className="py-2">
+              <th scope="col" className="py-3 font-medium">
                 Evidence
               </th>
             </tr>
           </thead>
           <tbody>
             {campaign.rows.map((row) => (
-              <tr key={row.config} className="border-b border-line">
-                <th scope="row" className="py-2 pr-3 font-medium">
+              <tr key={row.config} className="odd:bg-surface/60">
+                <th scope="row" className="py-3 pl-3 pr-4 font-medium">
                   {row.config_code} {row.config}
                 </th>
-                <td className="py-2 pr-3">{formatMeanCi(row.metrics[key])}</td>
-                <td className="py-2 pr-3">{row.seeds.join(", ")}</td>
-                <td className="py-2 pr-3">{row.injected_per_run.join(", ")}</td>
-                <td className="py-2 pr-3">{formatPaired(row.paired_asr_vs_c0)}</td>
-                <td className="py-2">{EVIDENCE_LEVEL_LABEL[row.evidence]}</td>
+                <td className="py-3 pr-4">{formatMeanCi(row.metrics[key])}</td>
+                <td className="py-3 pr-4">{row.seeds.join(", ")}</td>
+                <td className="py-3 pr-4">{row.injected_per_run.join(", ")}</td>
+                <td className="py-3 pr-4">{formatPaired(row.paired_asr_vs_c0)}</td>
+                <td className="py-3 pr-3">{EVIDENCE_LEVEL_LABEL[row.evidence]}</td>
               </tr>
             ))}
           </tbody>
@@ -91,9 +94,9 @@ function CampaignView({ campaign, dataset }: { campaign: Campaign; dataset: Data
         the chart clips them at the axis, the table does not.
       </p>
 
-      <aside className="rounded border border-warn p-4">
-        <h3 className="font-medium text-warn">What this does not show</h3>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
+      <aside className={`${CARD} bg-surface`}>
+        <h3 className="text-[1.5rem] text-risk">What this does not show</h3>
+        <ul className="mt-4 list-disc space-y-2 pl-5 text-muted">
           <li>Jobs come from the trace simulator, not from a real cluster.</li>
           <li>
             Model: {[...new Set(campaign.rows.map((row) => row.model_id))].join(", ")}. Results do
@@ -111,16 +114,16 @@ function CampaignView({ campaign, dataset }: { campaign: Campaign; dataset: Data
 function IntegrityView({ dataset }: { dataset: Dataset }) {
   const { integrity, manifest } = dataset;
   return (
-    <section aria-labelledby="integrity-heading" className="mt-12">
-      <h2 id="integrity-heading" className="font-serif text-2xl font-semibold">
+    <Band labelledBy="integrity-heading">
+      <h2 id="integrity-heading" className={H2}>
         Data integrity
       </h2>
-      <p className="mt-2 text-sm text-muted">
+      <p className="mt-3 max-w-prose text-muted">
         {manifest.counts.experiments_canonical} experiments from {manifest.counts.databases}{" "}
         databases, {manifest.counts.decisions} scheduling decisions. Dataset hash{" "}
         <code>{manifest.dataset_sha256.slice(0, 12)}</code>, generated {manifest.generated_at}.
       </p>
-      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+      <ul className="mt-6 max-w-prose list-disc space-y-2 pl-5">
         {integrity.missing_decisions.map((item) => (
           <li key={item.experiment_id}>
             {item.config} seed {item.seed} in {item.database}: {item.present} of {item.expected}{" "}
@@ -145,7 +148,7 @@ function IntegrityView({ dataset }: { dataset: Dataset }) {
           <li key={text}>Not recorded: {text}.</li>
         ))}
       </ul>
-    </section>
+    </Band>
   );
 }
 
@@ -156,22 +159,22 @@ function ResultsBody({ dataset }: { dataset: Dataset }) {
 
   if (!campaign) {
     return (
-      <p className="mt-6 text-muted">
+      <p className="mt-10 text-muted">
         The export contains no attack experiments yet, so there is nothing to chart.
       </p>
     );
   }
   return (
     <>
-      <div className="mt-6">
-        <label htmlFor="campaign" className="mr-2 text-sm text-muted">
+      <div className="mt-10">
+        <label htmlFor="campaign" className="mr-3 text-sm text-muted">
           Campaign (one database, one injection ratio)
         </label>
         <select
           id="campaign"
           value={campaign.groupId}
           onChange={(event) => setSelected(event.target.value)}
-          className="rounded border border-line bg-surface px-2 py-1 text-sm"
+          className="rounded-full bg-wash px-4 py-2 text-sm text-ink"
         >
           {campaigns.map((item) => (
             <option key={item.groupId} value={item.groupId}>
@@ -188,24 +191,29 @@ function ResultsBody({ dataset }: { dataset: Dataset }) {
 export default function ResultsPage() {
   const { data, error, isPending } = useDataset();
   return (
-    <section>
-      <h1 className="font-serif text-3xl font-semibold">Results</h1>
-      <p className="mt-3 max-w-prose text-muted">
-        Attack success rate (ASR) per defense configuration. Every figure is read from the exported
-        experiment databases, with the number of seeds and injected jobs beside it.
-      </p>
-      {isPending ? <p className="mt-6 text-muted">Loading results…</p> : null}
-      {error ? (
-        <p role="alert" className="mt-6 rounded border border-risk p-4 text-risk">
-          {error.message}
+    <>
+      <Band tone="gray">
+        <h1 className={`${H1} hero-in`}>Results</h1>
+        <p
+          className="hero-in mt-6 max-w-prose text-[21px] leading-snug text-muted"
+          style={cssVars({ "--hero-delay": "120ms" })}
+        >
+          Attack success rate (ASR) per defense configuration. Every figure is read from the
+          exported experiment databases, with the number of seeds and injected jobs beside it.
         </p>
-      ) : null}
-      {data ? (
-        <>
-          <ResultsBody dataset={data} />
-          <IntegrityView dataset={data} />
-        </>
-      ) : null}
-    </section>
+        {isPending ? <p className="mt-8 text-muted">Loading results…</p> : null}
+        {error ? (
+          <p role="alert" className={`${CARD} mt-8 bg-canvas text-risk`}>
+            {error.message}
+          </p>
+        ) : null}
+        {data ? (
+          <Reveal>
+            <ResultsBody dataset={data} />
+          </Reveal>
+        ) : null}
+      </Band>
+      {data ? <IntegrityView dataset={data} /> : null}
+    </>
   );
 }

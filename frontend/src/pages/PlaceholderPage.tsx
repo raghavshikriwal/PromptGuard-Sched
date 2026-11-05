@@ -1,3 +1,6 @@
+import Band from "../components/Band";
+import { H1 } from "../components/ui";
+
 interface PlaceholderPageProps {
   readonly title: string;
   readonly summary: string;
@@ -5,10 +8,10 @@ interface PlaceholderPageProps {
 
 export default function PlaceholderPage({ title, summary }: PlaceholderPageProps) {
   return (
-    <section>
-      <h1 className="font-serif text-3xl font-semibold">{title}</h1>
-      <p className="mt-3 max-w-prose text-muted">{summary}</p>
+    <Band>
+      <h1 className={H1}>{title}</h1>
+      <p className="mt-6 max-w-prose text-[21px] leading-snug text-muted">{summary}</p>
       <p className="mt-4 text-sm text-muted">This page is not built yet.</p>
-    </section>
+    </Band>
   );
 }

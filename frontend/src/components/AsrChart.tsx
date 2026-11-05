@@ -33,7 +33,7 @@ export default function AsrChart({ rows, tau }: AsrChartProps) {
       viewBox={`0 0 ${WIDTH} ${height}`}
       role="img"
       aria-label={`Attack success rate at threshold ${tau.toFixed(2)}: ${summary}`}
-      className="w-full max-w-3xl"
+      className="w-full"
     >
       {TICKS.map((tick) => (
         <g key={tick}>
@@ -43,6 +43,7 @@ export default function AsrChart({ rows, tau }: AsrChartProps) {
             y1={TOP}
             y2={TOP + rows.length * ROW_H}
             stroke="var(--line)"
+            strokeDasharray="2 4"
           />
           <text
             x={x(tick)}
@@ -75,13 +76,15 @@ export default function AsrChart({ rows, tau }: AsrChartProps) {
                     x2={x(metric.mean + metric.half_width)}
                     y1={cy}
                     y2={cy}
-                    stroke="var(--ink)"
-                    strokeWidth="2"
+                    stroke="var(--accent)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
                   />
                 ) : null}
                 {metric.points.map((point) =>
                   point.value === null ? null : (
                     <rect
+                      rx="2"
                       key={point.experiment_id}
                       x={x(point.value) - 4}
                       y={cy - 4}

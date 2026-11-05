@@ -1,3 +1,4 @@
+import { CARD } from "./ui";
 import { ZONE_DOT, ZONE_LABEL } from "../lib/pipeline";
 import {
   PROMPT_INPUT_GROUPS,
@@ -14,14 +15,14 @@ export default function TrustBoundaryDiagram() {
       <ol className="space-y-1" aria-label="Trust zones">
         {ZONE_ORDER.map((zone, index) => (
           <li key={zone}>
-            <div className="rounded border border-line bg-surface p-4">
+            <div className={`${CARD} bg-canvas`}>
               <p className="flex items-center gap-2 font-medium">
                 <span aria-hidden="true" className={`h-3 w-3 rounded-full ${ZONE_DOT[zone]}`} />
                 {ZONE_LABEL[zone]}
               </p>
               <ul className="mt-3 flex flex-wrap gap-2">
                 {stagesByZone(zone).map((stage) => (
-                  <li key={stage.id} className="rounded border border-line px-2 py-1 text-sm">
+                  <li key={stage.id} className="rounded-full bg-wash px-3 py-1 text-sm">
                     {stage.name}
                   </li>
                 ))}
@@ -43,14 +44,14 @@ export default function TrustBoundaryDiagram() {
         ))}
       </ol>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
+      <div className="mt-6 grid gap-5 md:grid-cols-2">
         {PROMPT_INPUT_GROUPS.map((group) => (
-          <div key={group.zone} className="rounded border border-line p-4">
+          <div key={group.zone} className={`${CARD} bg-canvas`}>
             <h3 className="flex items-center gap-2 font-medium">
               <span aria-hidden="true" className={`h-3 w-3 rounded-full ${ZONE_DOT[group.zone]}`} />
               {group.title}
             </h3>
-            <ul className="mt-2 list-disc pl-5 text-sm">
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
               {group.items.map((item) => (
                 <li key={item}>{item}</li>
               ))}
@@ -59,7 +60,7 @@ export default function TrustBoundaryDiagram() {
         ))}
       </div>
 
-      <p className="mt-4 max-w-prose text-sm text-muted">
+      <p className="mt-6 max-w-prose text-sm text-muted">
         With the trust boundary on ({boundaryCodes}), these two groups are marked as separate parts
         of the prompt. In every other configuration, tenant text enters the prompt without a marked
         boundary.

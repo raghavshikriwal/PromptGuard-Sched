@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CARD, pillToggle } from "./ui";
 import {
   DEFAULT_CONFIG_ID,
   DEFAULT_STAGE_ID,
@@ -27,16 +28,14 @@ export default function PipelineExplorer() {
             type="button"
             aria-pressed={item.id === configId}
             onClick={() => setConfigId(item.id)}
-            className={`rounded border border-line px-3 py-2 text-sm ${
-              item.id === configId ? "bg-ink text-bg" : "bg-surface"
-            }`}
+            className={pillToggle(item.id === configId)}
           >
             {item.code}: {item.label}
           </button>
         ))}
       </div>
 
-      <div className="mt-6 grid gap-6 md:grid-cols-[1fr_1.1fr]">
+      <div className="mt-8 grid gap-6 md:grid-cols-[1fr_1.1fr]">
         <ol className="space-y-2" aria-label="Pipeline stages">
           {PIPELINE_STAGES.map((item) => {
             const active = isStageActive(item, configId);
@@ -47,8 +46,8 @@ export default function PipelineExplorer() {
                   type="button"
                   aria-current={selected ? "true" : undefined}
                   onClick={() => setStageId(item.id)}
-                  className={`flex w-full items-center gap-3 rounded border px-3 py-3 text-left ${
-                    selected ? "border-ink bg-surface" : "border-line"
+                  className={`flex w-full items-center gap-3 rounded-[20px] px-5 py-4 text-left transition-colors ${
+                    selected ? "bg-surface" : "bg-wash/60 hover:bg-wash"
                   } ${active ? "" : "opacity-50"}`}
                 >
                   <span
@@ -63,10 +62,10 @@ export default function PipelineExplorer() {
           })}
         </ol>
 
-        <div className="rounded border border-line bg-surface p-5" aria-live="polite">
+        <div className={`${CARD} bg-surface`} aria-live="polite">
           {stage ? (
             <>
-              <h2 className="font-serif text-2xl font-semibold">{stage.name}</h2>
+              <h2 className="text-[2rem] leading-tight">{stage.name}</h2>
               <p className="mt-1 flex items-center gap-2 text-sm text-muted">
                 <span
                   aria-hidden="true"
@@ -75,12 +74,12 @@ export default function PipelineExplorer() {
                 {ZONE_LABEL[stage.zone]}
               </p>
               {!isStageActive(stage, configId) && (
-                <p className="mt-3 rounded border border-line px-3 py-2 text-sm text-muted">
+                <p className="mt-4 rounded-2xl bg-canvas px-4 py-3 text-sm text-muted">
                   This stage does not run in {config.code}.
                 </p>
               )}
               <p className="mt-4 max-w-prose">{stage.summary}</p>
-              <dl className="mt-4 space-y-3 text-sm">
+              <dl className="mt-6 space-y-4 text-sm">
                 <div>
                   <dt className="text-muted">Takes in</dt>
                   <dd>{stage.input}</dd>
