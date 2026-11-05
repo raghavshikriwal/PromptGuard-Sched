@@ -1,0 +1,56 @@
+{
+  "conflicting_experiments": [],
+  "databases_without_experiments": [
+    "injection_5pct_qwen_seed0.db",
+    "promptguard_sched.db"
+  ],
+  "duplicate_experiments": [],
+  "experiments_without_decisions": [],
+  "missing_decisions": [
+    {
+      "config": "C0",
+      "database": "ablation_confirmatory_3seeds_reproduction.db",
+      "expected": 10,
+      "experiment_id": "09747093a99f4db4984e4ff72ebe7de5",
+      "missing": 1,
+      "present": 9,
+      "seed": 2
+    },
+    {
+      "config": "C3",
+      "database": "ablation_confirmatory_3seeds_reproduction.db",
+      "expected": 10,
+      "experiment_id": "5dd59292bd8743e38dbda45a9ae856a1",
+      "missing": 1,
+      "present": 9,
+      "seed": 2
+    }
+  ],
+  "not_recorded_in_databases": [
+    "model revision / commit hash (experiments.model_id holds the name only)",
+    "payload library version per experiment",
+    "package versions and hardware used for each run",
+    "the intended number of jobs per run (only inferred from sibling configurations)"
+  ],
+  "repeat_runs_not_deduplicated": [],
+  "skipped_databases": [
+    {
+      "database": "gate_hf3.db",
+      "reason": "missing tables: experiments, jobs, schedule_decisions, stage_latencies"
+    },
+    {
+      "database": "gate_hf6.db",
+      "reason": "missing tables: experiments, jobs, schedule_decisions, stage_latencies"
+    },
+    {
+      "database": "gate_qwen_trial2.db",
+      "reason": "missing tables: experiments, jobs, schedule_decisions, stage_latencies"
+    }
+  ],
+  "smoke_test_experiments_excluded_from_aggregates": [
+    "c88d3c1dbb7948b4b13f8e514e636b04",
+    "ae53a378e5614b88bfeaf8abe6f668bd"
+  ],
+  "unfinished_experiments": [],
+  "unlabeled_attacks": []
+}

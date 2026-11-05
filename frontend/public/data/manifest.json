@@ -1,0 +1,73 @@
+{
+  "counts": {
+    "aggregate_rows": 3,
+    "attack_experiments": 11,
+    "baseline_experiments": 0,
+    "databases": 8,
+    "decisions": 2088,
+    "experiments_canonical": 11,
+    "experiments_found": 11
+  },
+  "dataset_sha256": "acd725f1ec0016b649f039ebdbd10a8cd8e0f1551ad55ea166336d1970513c9a",
+  "evidence_rule": "fewer than 2 seeds: pilot; 2 or more: exploratory; confirmatory is never assigned automatically",
+  "generated_at": "2026-11-05T04:15:42+00:00",
+  "generator": "eval.export.canonical_dataset",
+  "git_commit": "ab3d7f28df36b471aaa2e99836fbf33e5ec6a0ef",
+  "schema_version": 1,
+  "sources": [
+    {
+      "bytes": 262144,
+      "database": "ablation_confirmatory_3seeds_reproduction.db",
+      "experiments": 9,
+      "sha256": "2ae46163d6f71b72c3eeffba005b18ebec255f01abec9a8639db91686c8a3d2c"
+    },
+    {
+      "bytes": 0,
+      "database": "gate_hf3.db",
+      "experiments": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "database": "gate_hf6.db",
+      "experiments": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "database": "gate_qwen_trial2.db",
+      "experiments": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 1605632,
+      "database": "injection_1pct_smoke.db",
+      "experiments": 1,
+      "sha256": "84cbbf2b2fae9ed1b61d40e99d62dc2b12f220030b111e3bf39503e581520b2c"
+    },
+    {
+      "bytes": 98304,
+      "database": "injection_5pct_qwen_seed0.db",
+      "experiments": 0,
+      "sha256": "86872cb177ef6b8777e1cf5e0647d76d094662d6afd8937295a3d1a83506eee9"
+    },
+    {
+      "bytes": 1609728,
+      "database": "injection_5pct_smoke.db",
+      "experiments": 1,
+      "sha256": "2ea8d73b9570f125dc93ae7264a2801405b642ca7fbb653931cbdc81651db664"
+    },
+    {
+      "bytes": 98304,
+      "database": "promptguard_sched.db",
+      "experiments": 0,
+      "sha256": "cfa08ee219c7be78210ae72c434e7e7951bca71fced24c9f0447f7f4796eb748"
+    }
+  ],
+  "tau_default": 0.25,
+  "thresholds": [
+    0.1,
+    0.25,
+    0.5
+  ]
+}

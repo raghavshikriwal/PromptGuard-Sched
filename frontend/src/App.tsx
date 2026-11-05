@@ -5,9 +5,11 @@ import { NAV_ITEMS } from "./lib/nav";
 import HomePage from "./pages/HomePage";
 import PipelinePage from "./pages/PipelinePage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import ResultsPage from "./pages/ResultsPage";
 
 const BUILT_PAGES: Readonly<Record<string, ReactElement>> = {
   "/pipeline": <PipelinePage />,
+  "/results": <ResultsPage />,
 };
 
 export default function App() {
