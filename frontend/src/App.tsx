@@ -1,8 +1,14 @@
+import type { ReactElement } from "react";
 import { Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import { NAV_ITEMS } from "./lib/nav";
 import HomePage from "./pages/HomePage";
+import PipelinePage from "./pages/PipelinePage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+
+const BUILT_PAGES: Readonly<Record<string, ReactElement>> = {
+  "/pipeline": <PipelinePage />,
+};
 
 export default function App() {
   return (
@@ -13,7 +19,11 @@ export default function App() {
           <Route
             key={item.path}
             path={item.path}
-            element={<PlaceholderPage title={item.label} summary={item.summary} />}
+            element={
+              BUILT_PAGES[item.path] ?? (
+                <PlaceholderPage title={item.label} summary={item.summary} />
+              )
+            }
           />
         ))}
         <Route
