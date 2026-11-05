@@ -1,0 +1,254 @@
+
+"""Unit tests for `src/ilp/refine.py` (blueprint §15: "ILP constraint
+construction ... in isolation, pytest").
+"""
+
+from __future__ import annotations
+
+from uuid import uuid4
+
+import pytest
+
+from src.ilp.refine import IlpAllocationRefiner, IlpRefinementError
+from src.llm.schema import AllocationProposal
+from src.simulator.models import (
+    ClusterState,
+    Job,
+    NodeCapacity,
+    ResourceDemand,
+    Task,
+)
+
+
+def _job(
+    *,
+    cpu: float,
+    mem_gb: float,
+    disk_gb: float = 0.0,
+    net_mbps: float = 0.0,
+) -> Job:
+    return Job(
+        tenant_id=uuid4(),
+        tasks=(
+            Task(
+                task_name="task-0",
+                demand=ResourceDemand(
+                    cpu=cpu,
+                    mem_gb=mem_gb,
+                    disk_gb=disk_gb,
+                    net_mbps=net_mbps,
+                ),
+                est_duration_s=60,
+            ),
+        ),
+    )
+
+
+def _cluster(
+    *,
+    cpu: float,
+    mem_gb: float,
+    disk_gb: float = 0.0,
+    net_mbps: float = 0.0,
+) -> ClusterState:
+    return ClusterState(
+        observed_at_s=0,
+        nodes=(
+            NodeCapacity(
+                zone="zone-a",
+                capacity=ResourceDemand(
+                    cpu=cpu,
+                    mem_gb=mem_gb,
+                    disk_gb=disk_gb,
+                    net_mbps=net_mbps,
+                ),
+            ),
+        ),
+    )
+
+
+def _proposal(*, cpu_share: float, mem_share: float) -> AllocationProposal:
+    return AllocationProposal(
+        cpu_share=cpu_share,
+        mem_share=mem_share,
+        disk_share=0.0,
+        net_share=0.0,
+        rationale="test",
+    )
+
+
+class TestIlpAllocationRefiner:
+    def test_unconstrained_proposal_is_granted_exactly(self) -> None:
+        """When capacity comfortably exceeds demand at the proposed shares,
+        the LP's optimal solution is the proposal itself (zero deviation).
+        """
+        refiner = IlpAllocationRefiner()
+        job = _job(cpu=10.0, mem_gb=10.0)
+        cluster = _cluster(cpu=1000.0, mem_gb=1000.0)
+        proposal = _proposal(cpu_share=0.5, mem_share=0.9)
+
+        decision = refiner.refine(
+            job=job,
+            cluster_state=cluster,
+            proposal=proposal,
+            trace_id=uuid4(),
+        )
+
+        assert decision.solver_status == "Optimal"
+        assert decision.allocated_shares["cpu"] == pytest.approx(0.5, abs=1e-4)
+        assert decision.allocated_shares["mem_gb"] == pytest.approx(0.9, abs=1e-4)
+        assert decision.allocated.cpu == pytest.approx(5.0, abs=1e-3)
+        assert decision.allocated.mem_gb == pytest.approx(9.0, abs=1e-3)
+        assert decision.objective_value == pytest.approx(0.0, abs=1e-4)
+
+    def test_capacity_binds_the_proposal_down(self) -> None:
+        """A proposal that would exceed capacity gets clipped to the
+        tightest feasible share.
+        """
+        refiner = IlpAllocationRefiner()
+        job = _job(cpu=100.0, mem_gb=10.0)
+        cluster = _cluster(cpu=50.0, mem_gb=1000.0)
+        proposal = _proposal(cpu_share=1.0, mem_share=0.5)
+
+        decision = refiner.refine(
+            job=job,
+            cluster_state=cluster,
+            proposal=proposal,
+            trace_id=uuid4(),
+        )
+
+        assert decision.allocated_shares["cpu"] == pytest.approx(0.5, abs=1e-4)
+        assert decision.allocated.cpu <= 50.0 + 1e-6
+        assert decision.allocated_shares["mem_gb"] == pytest.approx(0.5, abs=1e-4)
+
+    def test_zero_capacity_for_demanded_resource_is_infeasible(self) -> None:
+        refiner = IlpAllocationRefiner()
+        job = _job(cpu=10.0, mem_gb=10.0, disk_gb=5.0)
+        cluster = _cluster(cpu=100.0, mem_gb=100.0, disk_gb=0.0)
+        proposal = _proposal(cpu_share=0.5, mem_share=0.5)
+
+        with pytest.raises(IlpRefinementError):
+            refiner.refine(
+                job=job,
+                cluster_state=cluster,
+                proposal=proposal,
+                trace_id=uuid4(),
+            )
+
+    def test_allocated_shares_never_exceed_unit_bounds(self) -> None:
+        refiner = IlpAllocationRefiner()
+        job = _job(cpu=1.0, mem_gb=1.0)
+        cluster = _cluster(cpu=1000.0, mem_gb=1000.0)
+        proposal = _proposal(cpu_share=1.0, mem_share=0.0)
+
+        decision = refiner.refine(
+            job=job,
+            cluster_state=cluster,
+            proposal=proposal,
+            trace_id=uuid4(),
+        )
+
+        for share in decision.allocated_shares.values():
+            assert 0.0 <= share <= 1.0
+
+
+class TestAvailableCapacity:
+    """Multi-job accounting: refine against what earlier jobs left over."""
+
+    def test_available_capacity_binds_below_total(self) -> None:
+        refiner = IlpAllocationRefiner()
+        job = _job(cpu=100.0, mem_gb=10.0)
+        cluster = _cluster(cpu=1000.0, mem_gb=1000.0)
+        remaining = ResourceDemand(
+            cpu=25.0,
+            mem_gb=1000.0,
+            disk_gb=0.0,
+            net_mbps=0.0,
+        )
+
+        decision = refiner.refine(
+            job=job,
+            cluster_state=cluster,
+            proposal=_proposal(cpu_share=1.0, mem_share=0.5),
+            trace_id=uuid4(),
+            available_capacity=remaining,
+        )
+
+        assert decision.allocated.cpu == pytest.approx(25.0, abs=1e-3)
+        assert decision.allocated_shares["mem_gb"] == pytest.approx(0.5, abs=1e-4)
+
+    def test_exhausted_remaining_capacity_allocates_zero_not_error(self) -> None:
+        refiner = IlpAllocationRefiner()
+        job = _job(cpu=10.0, mem_gb=10.0)
+        cluster = _cluster(cpu=100.0, mem_gb=100.0)
+        remaining = ResourceDemand(
+            cpu=0.0,
+            mem_gb=100.0,
+            disk_gb=0.0,
+            net_mbps=0.0,
+        )
+
+        decision = refiner.refine(
+            job=job,
+            cluster_state=cluster,
+            proposal=_proposal(cpu_share=1.0, mem_share=0.5),
+            trace_id=uuid4(),
+            available_capacity=remaining,
+        )
+
+        assert decision.allocated.cpu == pytest.approx(0.0, abs=1e-6)
+        assert decision.allocated_shares["mem_gb"] == pytest.approx(0.5, abs=1e-4)
+
+    def test_available_capacity_above_cluster_total_is_rejected(self) -> None:
+        refiner = IlpAllocationRefiner()
+        job = _job(cpu=10.0, mem_gb=10.0)
+        cluster = _cluster(cpu=100.0, mem_gb=100.0)
+        too_much = ResourceDemand(
+            cpu=101.0,
+            mem_gb=100.0,
+            disk_gb=0.0,
+            net_mbps=0.0,
+        )
+
+        with pytest.raises(ValueError, match="exceeds cluster total"):
+            refiner.refine(
+                job=job,
+                cluster_state=cluster,
+                proposal=_proposal(cpu_share=0.5, mem_share=0.5),
+                trace_id=uuid4(),
+                available_capacity=too_much,
+            )
+
+
+class TestProposalSecurityCap:
+    def test_min_share_cannot_raise_allocation_above_proposal(self) -> None:
+        """The anti-starvation floor must never override the proposal cap."""
+        refiner = IlpAllocationRefiner(min_share=0.8)
+        job = _job(cpu=10.0, mem_gb=10.0)
+        cluster = _cluster(cpu=1000.0, mem_gb=1000.0)
+        proposal = _proposal(cpu_share=0.6, mem_share=0.4)
+
+        decision = refiner.refine(
+            job=job,
+            cluster_state=cluster,
+            proposal=proposal,
+            trace_id=uuid4(),
+        )
+
+        assert decision.allocated_shares["cpu"] <= 0.6
+        assert decision.allocated_shares["mem_gb"] <= 0.4
+
+    def test_solver_result_clamp_enforces_proposal_cap(self) -> None:
+        """Floating-point solver overshoot must not escape the security cap."""
+        from src.ilp.refine import _clamp_share
+
+        assert _clamp_share(0.6000000271, upper_bound=0.6) == 0.6
+        assert _clamp_share(0.6000000096, upper_bound=0.6) == 0.6
+        assert _clamp_share(0.5999999999, upper_bound=0.6) == 0.5999999999
+
+    def test_missing_solver_value_raises_refinement_error(self) -> None:
+        """A missing CBC value must never silently become a zero allocation."""
+        from src.ilp.refine import _clamp_share
+
+        with pytest.raises(IlpRefinementError, match="has no value"):
+            _clamp_share(None, upper_bound=0.6)
