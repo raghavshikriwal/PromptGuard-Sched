@@ -1,7 +1,6 @@
 {
   "conflicting_experiments": [],
   "databases_without_experiments": [
-    "injection_5pct_qwen_seed0.db",
     "promptguard_sched.db"
   ],
   "duplicate_experiments": [],

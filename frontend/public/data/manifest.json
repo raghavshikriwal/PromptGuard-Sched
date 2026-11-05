@@ -1,18 +1,18 @@
 {
   "counts": {
-    "aggregate_rows": 3,
-    "attack_experiments": 11,
+    "aggregate_rows": 4,
+    "attack_experiments": 12,
     "baseline_experiments": 0,
     "databases": 8,
-    "decisions": 2088,
-    "experiments_canonical": 11,
-    "experiments_found": 11
+    "decisions": 3086,
+    "experiments_canonical": 12,
+    "experiments_found": 12
   },
-  "dataset_sha256": "acd725f1ec0016b649f039ebdbd10a8cd8e0f1551ad55ea166336d1970513c9a",
+  "dataset_sha256": "12ffe83d529f47705c54ea1059ae890105658e0d052fe4672f5c1ead9d70a00a",
   "evidence_rule": "fewer than 2 seeds: pilot; 2 or more: exploratory; confirmatory is never assigned automatically",
-  "generated_at": "2026-11-05T04:15:42+00:00",
+  "generated_at": "2026-11-05T05:37:35+00:00",
   "generator": "eval.export.canonical_dataset",
-  "git_commit": "ab3d7f28df36b471aaa2e99836fbf33e5ec6a0ef",
+  "git_commit": "d056e9c8ce77d8b8c709addcdb369e1b6a4c0dc5",
   "schema_version": 1,
   "sources": [
     {
@@ -46,10 +46,10 @@
       "sha256": "84cbbf2b2fae9ed1b61d40e99d62dc2b12f220030b111e3bf39503e581520b2c"
     },
     {
-      "bytes": 98304,
+      "bytes": 1970176,
       "database": "injection_5pct_qwen_seed0.db",
-      "experiments": 0,
-      "sha256": "86872cb177ef6b8777e1cf5e0647d76d094662d6afd8937295a3d1a83506eee9"
+      "experiments": 1,
+      "sha256": "bb32661f204aa0c4355f6765cdd632c3c8fdefc1b560ab393dbb93875b1559c3"
     },
     {
       "bytes": 1609728,

@@ -1,4 +1,4 @@
-"""CLI: run the C0 injection sweep and print ASR / CFD per injection ratio.
+﻿"""CLI: run the C0 injection sweep and print ASR / CFD per injection ratio.
 
     python -m eval.experiments.run_injection_sweep --backend echo
     python -m eval.experiments.run_injection_sweep --backend huggingface --model-id <id>
@@ -9,7 +9,7 @@ is read back from the database by `eval/metrics/attack_metrics.py`.
 
 `--backend echo` is a pipeline smoke test only: the echo backend never reads
 job text, so its ASR says nothing about prompt injection. Real attack
-results need a real model, and (blueprint §13) only after the baseline gate
+results need a real model, and (blueprint Â§13) only after the baseline gate
 in `run_baseline_gate.py` has passed for that model.
 """
 
@@ -69,7 +69,7 @@ def _fmt(value: float | None, digits: int = 3) -> str:
 
 
 def render_table(rows: Sequence[tuple[float, AttackMetrics]]) -> str:
-    """One line per injection ratio: ASR at each τ, CFD and mean Δ(J) of injected jobs."""
+    """One line per injection ratio: ASR at each Ï„, CFD and mean Î”(J) of injected jobs."""
     taus = DEFAULT_THRESHOLDS
     header = (
         f"{'ratio':>6} {'injected':>8} "
@@ -125,18 +125,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             for result in results
         ]
         failed = sum(len(result.run.jobs_failed) for result in results)
+        failures = [
+            (result.ratio, failure)
+            for result in results
+            for failure in result.run.jobs_failed
+        ]
 
     if args.backend == "echo":
         print(
-            "\n[SMOKE TEST — the echo backend never reads job text, so these ASR figures "
+            "\n[SMOKE TEST â€” the echo backend never reads job text, so these ASR figures "
             "carry no information about prompt injection. Use --backend huggingface.]\n"
         )
     print(f"payload library v{PAYLOAD_LIBRARY_VERSION}, defense=C0 (none), seed={args.seed}")
     print(render_table(rows))
     if failed:
         print(f"\nwarning: {failed} job(s) failed in the pipeline and are not scored.")
+        for ratio, failure in failures:
+            print(
+                f"  ratio={ratio:.2f} "
+                f"job_id={failure.job_id} "
+                f"{failure.exception_type}: {failure.error}"
+            )
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # PromptGuard-Sched
 
@@ -36,11 +36,11 @@ Large language models (LLMs) can interpret workload descriptions and propose res
 - DRF entitlement calculations, entitlement caching, a capacity ledger, anomaly-cap logic, experiment persistence, and metric/statistics utilities.
 - A local test snapshot of **395 passing tests and 97.19% coverage** (Python 3.12.10; the configured coverage gate is 85%).
 - Historical database audits that checked 88 persisted allocation-deviation values with zero mismatches and independently replayed DRF entitlements to within approximately `1.2e-9`.
-- Real Qwen experiment records at a 10% injection ratio across C0–C4 and three seeds, plus a 200-job Qwen baseline run and smaller diagnostic/ablation runs.
+- Real Qwen experiment records at a 10% injection ratio across C0–C4 and three seeds; a completed 1,000-job 5% C0 seed-0 pilot (48/50 injected jobs scored); a 200-job Qwen baseline; and smaller diagnostic/ablation runs.
 
 ### What is not complete
 
-The low-injection evidence matrix is not yet complete. In particular, the 1% and 5% real-Qwen comparisons do not yet provide a complete, multi-seed C0–C4 evaluation. The 10% matrix contains one incomplete configuration/seed record. The current three-seed, high-injection comparison is underpowered. A final deduplicated analysis dataset, comprehensive statistical report, publication-quality figures, and final paper/viva materials remain to be completed.
+The low-injection evidence matrix is not yet complete. No complete real-Qwen 1% matrix is verified, and the 5% evidence currently consists of one C0 seed-0 pilot with 96% injected-job scoring coverage—not a multi-seed C0–C4 comparison. The 10% matrix contains one incomplete configuration/seed record and only three injected jobs per cell. The high-injection comparison is underpowered. A final deduplicated analysis dataset, comprehensive statistical report, publication-quality figures, and final paper/viva materials remain to be completed.
 
 > **Interpretation rule:** The results below are reported with their dataset, workload, and sample-size limitations. A point estimate is not treated as proof of a defense effect. Missing decisions are not silently counted as successful defenses.
 
@@ -385,21 +385,73 @@ The long completion times are consistent with long dependency/critical paths in 
 
 ### 8.6 Low-injection evaluation status
 
-The project configuration defines the intended low-injection ratios as **1%, 5%, and 10%**, and the configured default seed count as five. The real-model evidence available in the audit is not yet a complete matrix at those ratios.
+The project configuration defines the intended low-injection ratios as **1%, 5%, and 10%**, and the configured default seed count as five. The real-model evidence remains incomplete. The completed 5% pilot below is exploratory evidence, not a completed defense matrix.
 
 | Ratio | Evidence currently available | Status |
 |---|---|---|
-| **1%** | Small deterministic/echo smoke checks were discussed; no complete real-Qwen 1% C0–C4 multi-seed matrix is verified. | Outstanding. Echo runs are not model evidence. |
-| **5%** | A real-Qwen seed-0 pilot was launched with 1,000 requested jobs, 20 nodes, target utilization 1.5, and 50 expected injected jobs. At the last reported checkpoint, the process was active but no experiment/job/decision rows had yet been persisted. | In progress at last checkpoint; no result is reported here. Confirm completion and final database contents before including it in analysis. |
-| **10%** | Qwen C0–C4 × seeds 0–2, 30 jobs requested per cell. | Substantial pilot matrix exists, but C4 seed 2 has 29 rather than 30 decisions. Only 3 injected jobs per cell; not enough attack samples for strong inference. |
+| **1%** | No complete real-Qwen 1% C0–C4 multi-seed matrix is verified. Deterministic/echo smoke checks are not real-model evidence. | Outstanding. |
+| **5%** | Qwen `Qwen/Qwen2.5-3B-Instruct`, C0 (`none`), seed 0; 1,000 generated jobs, 950 benign and 50 injected. 998 decisions persisted: 950 benign and 48 injected. | Completed single-seed exploratory pilot; 96% injected-job scoring coverage. Two injected jobs have no decision. |
+| **10%** | Qwen C0–C4 × seeds 0–2, 30 jobs requested per cell. | 14 cells have 30 decisions; C4 seed 2 has 29. Only 3 injected jobs per cell, insufficient for strong inference. |
 
-The 5% pilot command used was:
+#### 5% Qwen C0 seed-0 pilot: experiment metadata
+
+| Field | Recorded value |
+|---|---|
+| Model | `Qwen/Qwen2.5-3B-Instruct` |
+| Backend | Hugging Face |
+| Defense | C0 (`none`) |
+| Injection ratio | 0.05 |
+| Seed | 0 |
+| Requested jobs | 1,000 |
+| Nodes | 20 |
+| Target utilization | 1.5 |
+| Database | `data/injection_5pct_qwen_seed0.db` |
+| Experiment ID | `7d5c183479b9428583273d93c6e1616c` |
+
+#### Population and persistence audit
+
+| Population audit | Count |
+|---|---:|
+| Generated jobs | 1,000 |
+| Benign jobs | 950 |
+| Injected jobs | 50 |
+| Persisted decisions | 998 |
+| Benign decisions | 950 |
+| Injected decisions | 48 |
+| Injected jobs without decisions | 2 |
+| Injected-job scoring coverage | 96% |
+
+Both missing decisions belong to the `urgency_authority_framing` attack family.
+
+The database does not persist the exception details for these failures. Their exact causes therefore cannot be established retrospectively.
+
+The 998 persisted decisions have 2,994 stage-latency records: 998 each for encoding, LLM inference, and ILP refinement.
+
+#### Runner-reported pilot metrics
+
+| Metric | Result |
+|---|---:|
+| ASR @ 0.10 | 0.375 |
+| ASR @ 0.25 | 0.312 |
+| ASR @ 0.50 | 0.250 |
+| CFD | 1.243 |
+| Mean injected Δ(J) | 0.683 |
+
+These are the runner-reported values for the **48 scored injected jobs**, not all 50 generated injected jobs.
+
+The two missing outcomes must not be treated as either attack successes or successful defenses. These values are descriptive pilot estimates, not statistically conclusive findings.
+
+#### Reproduction command
 
 ```powershell
 python -m eval.experiments.run_injection_sweep --backend huggingface --model-id Qwen/Qwen2.5-3B-Instruct --num-jobs 1000 --num-nodes 20 --target-utilization 1.5 --seed 0 --ratios 0.05 --database-url sqlite:///./data/injection_5pct_qwen_seed0.db
 ```
 
-This pilot is a single-seed, single-configuration injection-sweep run as currently recorded in the project discussion; it is not a substitute for a full C0–C4 defense comparison. Its final console output and database audit must be captured after it finishes.
+**Interpretation:** this is one model, one seed, one defense condition (C0), and one workload configuration. It does not measure defense effectiveness relative to C1–C4.
+
+The two missing injected-job outcomes and lack of persisted exception details limit completeness. A future instrumented run should persist structured failure records containing at least job ID, exception type, and error message.
+
+Do not overwrite the historical database merely to recover unavailable failure details.
 
 ---
 
@@ -408,7 +460,7 @@ This pilot is a single-seed, single-configuration injection-sweep run as current
 The available evidence supports the following restrained statements:
 
 1. The project implements a functioning LLM-assisted scheduling research pipeline with configurable defenses, persistence, and measurable allocation outcomes.
-2. Real Qwen runs have been executed for benign baselines, high-injection ablations, and a 10% injection-ratio C0–C4 pilot matrix.
+2. Real Qwen runs have been executed for benign baselines, high-injection ablations, a 10% C0–C4 pilot matrix, and a completed 1,000-job 5% C0 seed-0 pilot with 48 of 50 injected jobs scored.
 3. In the small 60% stress-test comparison, C3 and C4 have lower point estimates than C0 for ASR at \(\tau=0.25\) and \(0.50\), and lower observed benign CFD. However, the confidence intervals are wide and include zero.
 4. The full defense C4 does not dominate every observed metric: its ASR point estimate at \(\tau=0.10\) is higher than C0/C3 in the three-seed aggregate.
 5. The historical `delta_j` and entitlement audits support numerical consistency for the specific 88 audited decisions.
@@ -546,14 +598,14 @@ Do not pool multiple database copies of the same run. Database filename differen
 
 The following is the research completion plan based on the work completed so far.
 
-### Priority 1 — Close the current 5% Qwen pilot
+### Priority 1 — Improve low-injection evidence quality
 
-- [ ] Capture the final console output and exit status.
-- [ ] Verify the expected injected/benign counts and persisted decisions.
-- [ ] Confirm the run is complete and record its experiment ID, database checksum, and run manifest.
-- [ ] Recompute ASR/CFD from persisted `delta_j`; report missing decisions and failures separately.
-- [ ] Do not interpret a single seed as final evidence.
-
+- [x] Complete one real-Qwen 5% C0 seed-0 pilot with 1,000 generated jobs.
+- [x] Audit population counts and persisted decisions: 950 benign decisions and 48 of 50 injected decisions.
+- [x] Record runner-reported ASR/CFD metrics and the experiment ID.
+- [ ] Add durable structured failure persistence (job ID, exception type, error message).
+- [ ] Investigate the two missing injected-job decisions in a future instrumented run.
+- [ ] Expand 5% beyond the single-seed C0 pilot; do not treat this pilot as final evidence.
 ### Priority 2 — Complete the low-injection matrix
 
 - [ ] Decide and document the target number of jobs and seeds for 1%, 5%, and 10%.
@@ -611,7 +663,7 @@ These are not prerequisites for honestly reporting the current simulator researc
 3. **High-injection stress-test prevalence.** The 60% condition is useful for exercising the attack path but is not a representative real-world attack rate.
 4. **Single model family.** The current real-model evidence centers on Qwen2.5-3B-Instruct. Other model families, sizes, providers, and prompt templates may behave differently.
 5. **Model revision not pinned in archived loader.** A model ID alone is insufficient for exact checkpoint reproducibility.
-6. **Missing decisions.** At least one 10% C4 seed-2 cell has one fewer persisted decision. This must be accounted for in denominators and matched analyses.
+6. **Missing decisions.** The 5% pilot has two missing injected-job decisions (both `urgency_authority_framing`), and the 10% C4 seed-2 cell has one fewer persisted decision. These must be accounted for in denominators and matched analyses.
 7. **Baseline mismatch.** The 200-job baseline gate failed the directional JCT and SLA checks. This weakens claims of benchmark fidelity and should be investigated or explicitly bounded.
 8. **Synthetic workload and simulator abstraction.** The inspected results use generated workloads and a single-window scheduling model, not a verified raw Google trace replay or production arrival stream.
 9. **Metric scope.** DRF-relative deviation is one allocation-fairness measure; it does not capture every aspect of starvation, temporal fairness, service quality, or user-perceived performance.
@@ -719,3 +771,4 @@ This project is distributed under the **MIT License**. See [`LICENSE`](LICENSE) 
 *PromptGuard-Sched is a research prototype. Transparent methodology, reproducible evidence, and explicit limitations are part of the research result.*
 
 </div>
+
