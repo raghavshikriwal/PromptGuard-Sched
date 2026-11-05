@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AsrChart from "../components/AsrChart";
+import ForestPlot, { pairedRows } from "../components/ForestPlot";
 import Band from "../components/Band";
 import Reveal from "../components/Reveal";
 import { CARD, H1, H2, pillToggle, cssVars } from "../components/ui";
@@ -46,6 +47,21 @@ function CampaignView({ campaign, dataset }: { campaign: Campaign; dataset: Data
       <div className={`${CARD} bg-surface`}>
         <AsrChart rows={campaign.rows} tau={tau} />
       </div>
+
+      {pairedRows(campaign.rows).length > 0 ? (
+        <div className={`${CARD} bg-surface`}>
+          <h3 className="text-[1.5rem]">Reduction vs C0, paired by seed</h3>
+          <p className="mt-2 max-w-prose text-sm text-muted">
+            Each dot is the average drop in attack success rate compared with C0, computed per seed
+            and then averaged. If the bar crosses the 0% line, the data cannot tell this defense
+            apart from no defense. Shown at the default threshold; it does not follow the toggle
+            above.
+          </p>
+          <div className="mt-6">
+            <ForestPlot rows={campaign.rows} tau={dataset.manifest.tau_default} />
+          </div>
+        </div>
+      ) : null}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[34rem] text-left text-sm">

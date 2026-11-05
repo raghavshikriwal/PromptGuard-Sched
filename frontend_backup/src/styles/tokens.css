@@ -1,0 +1,47 @@
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --ink: #14213d;
+  --muted: #5b6478;
+  --line: #d9dde5;
+  --safe: #0f766e;
+  --risk: #b4440f;
+  --warn: #a16207;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1424;
+    --surface: #161e33;
+    --ink: #e8ecf5;
+    --muted: #9aa5bd;
+    --line: #2a3550;
+    --safe: #3fc1b0;
+    --risk: #ef8a55;
+    --warn: #e0b04a;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-safe: var(--safe);
+  --color-risk: var(--risk);
+  --color-warn: var(--warn);
+  --font-serif: "Newsreader", Georgia, serif;
+  --font-sans: "Public Sans", system-ui, sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 3px solid var(--safe);
+  outline-offset: 2px;
+}

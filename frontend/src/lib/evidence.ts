@@ -6,15 +6,6 @@ export const EVIDENCE_LEVEL_LABEL: Record<EvidenceLevel, string> = {
   confirmatory: "Confirmatory evidence",
 };
 
-export const CURRENT_EVIDENCE_LEVEL: EvidenceLevel = "exploratory";
-
-export const EVIDENCE_FACTS: readonly string[] = [
-  "42 real Qwen2.5-3B-Instruct run records across 14 databases.",
-  "In the 10% injection pilot each run has only 3 injected jobs, so rates move in steps of one third.",
-  "The 60% stress test uses 3 seeds, so confidence intervals are wide.",
-  "One 10% run persisted 29 of 30 decisions. Missing decisions are reported, not hidden.",
-];
-
 export interface ResourceShare {
   readonly resource: string;
   readonly share: number;

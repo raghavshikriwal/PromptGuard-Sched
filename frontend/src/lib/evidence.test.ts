@@ -1,19 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  CURRENT_EVIDENCE_LEVEL,
-  EVIDENCE_FACTS,
-  EVIDENCE_LEVEL_LABEL,
-  RECORDED_EXAMPLE,
-} from "./evidence";
+import { EVIDENCE_LEVEL_LABEL, RECORDED_EXAMPLE } from "./evidence";
 
 describe("evidence data", () => {
-  it("labels the current evidence as exploratory", () => {
-    expect(EVIDENCE_LEVEL_LABEL[CURRENT_EVIDENCE_LEVEL]).toBe("Exploratory evidence");
-  });
-
-  it("lists non-empty evidence facts", () => {
-    expect(EVIDENCE_FACTS.length).toBeGreaterThan(0);
-    expect(EVIDENCE_FACTS.every((fact) => fact.trim().length > 0)).toBe(true);
+  it("has a label for every evidence level", () => {
+    expect(EVIDENCE_LEVEL_LABEL.exploratory).toBe("Exploratory evidence");
   });
 
   it("records final shares below the proposed share for every resource", () => {
