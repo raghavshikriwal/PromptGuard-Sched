@@ -4,18 +4,12 @@ import {
   DEFAULT_STAGE_ID,
   DEFENSE_CONFIGS,
   PIPELINE_STAGES,
+  ZONE_DOT,
   ZONE_LABEL,
   getConfig,
   isStageActive,
   type DefenseConfigId,
-  type TrustZone,
 } from "../lib/pipeline";
-
-const ZONE_DOT: Record<TrustZone, string> = {
-  tenant: "bg-risk",
-  mixed: "bg-warn",
-  trusted: "bg-safe",
-};
 
 export default function PipelineExplorer() {
   const [configId, setConfigId] = useState<DefenseConfigId>(DEFAULT_CONFIG_ID);

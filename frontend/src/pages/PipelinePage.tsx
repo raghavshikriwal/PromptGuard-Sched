@@ -1,4 +1,5 @@
 import PipelineExplorer from "../components/PipelineExplorer";
+import TrustBoundaryDiagram from "../components/TrustBoundaryDiagram";
 
 export default function PipelinePage() {
   return (
@@ -14,6 +15,15 @@ export default function PipelinePage() {
       </p>
       <div className="mt-8">
         <PipelineExplorer />
+      </div>
+
+      <h2 className="mt-14 font-serif text-2xl font-semibold">Where tenant text enters</h2>
+      <p className="mt-2 max-w-prose text-muted">
+        Tenants control free text only. Everything that decides what is accepted sits in trusted
+        scheduler code.
+      </p>
+      <div className="mt-6">
+        <TrustBoundaryDiagram />
       </div>
     </section>
   );

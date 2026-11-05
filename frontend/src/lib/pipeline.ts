@@ -146,3 +146,9 @@ export function getConfig(id: DefenseConfigId): DefenseConfig {
 export function isStageActive(stage: PipelineStage, configId: DefenseConfigId): boolean {
   return stage.activeIn === "always" || stage.activeIn.includes(configId);
 }
+
+export const ZONE_DOT: Record<TrustZone, string> = {
+  tenant: "bg-risk",
+  mixed: "bg-warn",
+  trusted: "bg-safe",
+};
